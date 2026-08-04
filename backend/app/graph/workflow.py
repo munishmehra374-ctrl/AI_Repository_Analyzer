@@ -1,10 +1,11 @@
 from langgraph.graph import StateGraph, START, END
 
-from app.graph.state import GraphState
 from app.graph.dependencies import dependencies
+from app.graph.state import GraphState
 
 from app.nodes.planner_node import PlannerNode
-from app.nodes.retrieval_node import RetrievalNode
+from app.nodes.tool_executor_node import ToolExecutorNode
+from app.nodes.context_aggregator_node import ContextAggregatorNode
 from app.nodes.answer_node import AnswerNode
 
 
@@ -14,9 +15,13 @@ def create_workflow():
         dependencies.llm_service
     )
 
-    retrieval = RetrievalNode(
-        dependencies.retrieval_service
+    tool_executor = ToolExecutorNode(
+        dependencies.retrieval_tool,
+        dependencies.graph_tool,
+        dependencies.repository_tool,
     )
+
+    context_aggregator = ContextAggregatorNode()
 
     answer = AnswerNode(
         dependencies.llm_service
@@ -24,13 +29,49 @@ def create_workflow():
 
     workflow = StateGraph(GraphState)
 
-    workflow.add_node("planner", planner)
-    workflow.add_node("retrieval", retrieval)
-    workflow.add_node("answer", answer)
+    workflow.add_node(
+        "planner",
+        planner,
+    )
 
-    workflow.add_edge(START, "planner")
-    workflow.add_edge("planner", "retrieval")
-    workflow.add_edge("retrieval", "answer")
-    workflow.add_edge("answer", END)
+    workflow.add_node(
+        "tool_executor",
+        tool_executor,
+    )
+
+    workflow.add_node(
+        "context_aggregator",
+        context_aggregator,
+    )
+
+    workflow.add_node(
+        "answer",
+        answer,
+    )
+
+    workflow.add_edge(
+        START,
+        "planner",
+    )
+
+    workflow.add_edge(
+        "planner",
+        "tool_executor",
+    )
+
+    workflow.add_edge(
+        "tool_executor",
+        "context_aggregator",
+    )
+
+    workflow.add_edge(
+        "context_aggregator",
+        "answer",
+    )
+
+    workflow.add_edge(
+        "answer",
+        END,
+    )
 
     return workflow.compile()

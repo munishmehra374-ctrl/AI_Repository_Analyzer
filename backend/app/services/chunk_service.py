@@ -21,12 +21,21 @@ class ChunkService:
             encoding="utf-8"
         )
 
+        print(f"\nProcessing: {file_path}")
+        print(f"Source code length: {len(source_code)}")
+
         tree = self.parser.parse(source_code)
+
+        print("Tree parsed successfully.")
 
         extracted_data = self.extractor.extract(
             tree,
             source_code
         )
+
+        print("Extracted data:")
+        print(type(extracted_data))
+        print(extracted_data)
 
         chunks = self.chunker.chunk(
             extracted_data=extracted_data,
@@ -34,4 +43,10 @@ class ChunkService:
             language="python"
         )
 
-        return chunks
+        print(f"Chunks generated: {len(chunks)}")
+
+        return {
+            "chunks": chunks,
+            "ast": extracted_data,
+            "source_code": source_code
+        }

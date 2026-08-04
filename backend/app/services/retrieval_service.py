@@ -9,18 +9,6 @@ from app.retrieval.rrf import ReciprocalRankFusion
 class RetrievalService:
     """
     Orchestrates the complete retrieval pipeline.
-
-    Pipeline
-    --------
-    Hybrid Retrieval
-            ↓
-    Reciprocal Rank Fusion
-            ↓
-    Cross Encoder Re-ranking
-            ↓
-    Context Optimization
-            ↓
-    Final Context
     """
 
     def __init__(
@@ -40,43 +28,73 @@ class RetrievalService:
         self,
         question: str,
     ) -> str:
-        """
-        Execute the complete retrieval pipeline.
-        """
 
+        print("\n========== RETRIEVAL SERVICE ==========")
+        print("Question:", question)
+
+        # -----------------------------------------
         # Step 1 : Hybrid Retrieval
+        # -----------------------------------------
+
         results = self._hybrid_retriever.retrieve(question)
 
         vector_results = results["vector_results"]
         bm25_results = results["bm25_results"]
 
-        print("\n========== VECTOR ==========")
-        print(vector_results[0])
+        print(f"\nVector Results : {len(vector_results)}")
+        print(f"BM25 Results   : {len(bm25_results)}")
 
-        print("\n========== BM25 ==========")
-        print(bm25_results[0])
+        if vector_results:
+            print("\nFirst Vector Result:")
+            print(vector_results[0])
 
+        if bm25_results:
+            print("\nFirst BM25 Result:")
+            print(bm25_results[0])
+
+        # -----------------------------------------
         # Step 2 : Reciprocal Rank Fusion
+        # -----------------------------------------
+
         fused_results = self._rrf.fuse(
             vector_results=vector_results,
             bm25_results=bm25_results,
         )
 
+        print(f"\nFused Results : {len(fused_results)}")
+
+        # -----------------------------------------
         # Step 3 : Cross Encoder Re-ranking
+        # -----------------------------------------
+
         reranked_results = self._reranker.rerank(
             query=question,
             chunks=fused_results,
         )
 
+        print(f"Reranked Results : {len(reranked_results)}")
+
+        # -----------------------------------------
         # Step 4 : Context Optimization
+        # -----------------------------------------
+
         optimized_context = self._context_optimizer.optimize(
             reranked_results
         )
 
-        # Step 5 : Convert chunks into a single context string
+        print(f"Optimized Chunks : {len(optimized_context)}")
+
+        # -----------------------------------------
+        # Step 5 : Final Context
+        # -----------------------------------------
+
         context = "\n\n".join(
             chunk["code"]
             for chunk in optimized_context
         )
+
+        print("\n========== FINAL RETRIEVAL CONTEXT ==========")
+        print(context[:1000])
+        print("=============================================\n")
 
         return context

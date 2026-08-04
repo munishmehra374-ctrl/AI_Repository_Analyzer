@@ -8,10 +8,17 @@ from app.services.llm_service import LLMService
 
 
 class PlannerNode:
-    def __init__(self, llm_service: LLMService):
+
+    def __init__(
+        self,
+        llm_service: LLMService,
+    ):
         self.llm = llm_service
 
-    def __call__(self, state: GraphState):
+    def __call__(
+        self,
+        state: GraphState,
+    ):
 
         prompt = PLANNER_PROMPT.format(
             repository_uploaded=state["repository_uploaded"],
@@ -28,16 +35,51 @@ class PlannerNode:
             ]
         )
 
-        print("\n========== PLANNER RESPONSE ==========")
+        print("\n========== PLANNER RAW RESPONSE ==========")
         print(response)
-        print(type(response))
+        print("==========================================\n")
+
+        response = (
+            response.replace("```json", "")
+            .replace("```", "")
+            .strip()
+        )
+
+        print("\n========== CLEANED RESPONSE ==========")
+        print(response)
         print("======================================\n")
 
-        response = response.replace("```json", "").replace("```", "").strip()
+        try:
+            decision = json.loads(response)
 
-        decision = json.loads(response)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Planner returned invalid JSON:\n{response}"
+            ) from e
 
-        state["question_type"] = decision["question_type"]
-        state["needs_retrieval"] = decision["needs_retrieval"]
+        print("\n========== PLANNER DECISION ==========")
+        print(decision)
+        print("======================================\n")
+
+        state["question_type"] = decision.get(
+            "question_type",
+            "repository",
+        )
+
+        state["tools"] = decision.get(
+            "tools",
+            [],
+        )
+
+        state["reason"] = decision.get(
+            "reason",
+            "",
+        )
+
+        print("\n========== STATE AFTER PLANNER ==========")
+        print("Question Type :", state["question_type"])
+        print("Tools         :", state["tools"])
+        print("Reason        :", state["reason"])
+        print("=========================================\n")
 
         return state

@@ -18,20 +18,30 @@ class AnswerNode:
         state: GraphState,
     ):
 
+        context = state.get("context") or ""
+
+        question_type = state.get(
+            "question_type",
+            "general",
+        )
+
         prompt = ANSWER_PROMPT.format(
-            context=state.get("context", ""),
-            question_type=state["question_type"],
+            context=context,
+            question_type=question_type,
         )
 
         print("\n========== ANSWER NODE ==========")
         print("Question:", state["question"])
+        print("Question Type:", question_type)
         print("=================================\n")
 
+        messages = [
+            SystemMessage(content=prompt),
+            HumanMessage(content=state["question"]),
+        ]
+
         answer = self.llm.invoke(
-            [
-                SystemMessage(content=prompt),
-                HumanMessage(content=state["question"]),
-            ]
+            messages
         )
 
         print("\n========== FINAL ANSWER ==========")

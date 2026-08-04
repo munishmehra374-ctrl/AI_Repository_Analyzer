@@ -17,11 +17,14 @@ class GraphTool:
 
     def execute(
         self,
-        question: str,
+        query: str,
     ) -> str:
 
+        print("\n========== GRAPH TOOL ==========")
+        print("Graph Query:", query)
+
         entity = self.entity_resolver.resolve(
-            question
+            query
         )
 
         if entity["type"] == "function":

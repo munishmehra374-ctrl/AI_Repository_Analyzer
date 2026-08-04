@@ -7,6 +7,11 @@ from app.metadata.repository_metadata import RepositoryMetadata
 from app.metadata.statistics_analyzer import StatisticsAnalyzer
 from app.metadata.module_analyzer import ModuleAnalyzer
 from app.metadata.technology_detector import TechnologyDetector
+from app.metadata.system_architecture import (
+    SYSTEM_SUMMARY,
+    INDEXING_PIPELINE,
+    QUESTION_ANSWERING_PIPELINE,
+)
 
 
 class RepositoryMetadataService:
@@ -26,11 +31,6 @@ class RepositoryMetadataService:
         self.module_analyzer = ModuleAnalyzer()
 
         self.technology_detector = TechnologyDetector()
-
-    # =====================================================
-    # Update Repository Profile
-    # =====================================================
-
     def update(
         self,
         extracted_data: dict,
@@ -98,12 +98,10 @@ class RepositoryMetadataService:
         # -------------------------------------------------
 
         technologies = self.technology_detector.detect(
-
             extracted_data.get(
                 "imports",
                 [],
             )
-
         )
 
         self.repository.frameworks.update(
@@ -128,6 +126,26 @@ class RepositoryMetadataService:
 
         self.repository.dependencies.update(
             technologies["dependencies"]
+        )
+
+        # -------------------------------------------------
+        # Repository Summary
+        # -------------------------------------------------
+
+        self.repository.summary = (
+            "AI Repository Analyzer that indexes source code using "
+            "AST extraction, semantic chunking, hybrid retrieval "
+            "(ChromaDB + BM25), Neo4j Knowledge Graph, and "
+            "Repository Metadata."
+        )
+
+        # -------------------------------------------------
+        # Repository Architecture
+        # -------------------------------------------------
+
+        self.repository.architecture = (
+            "Repository Reader -> AST Extraction -> Semantic Chunking -> "
+            "ChromaDB + BM25 + Neo4j Knowledge Graph + Repository Metadata"
         )
 
     # =====================================================
@@ -160,64 +178,234 @@ class RepositoryMetadataService:
             },
 
             "languages":
-
-                sorted(
-                    self.repository.languages
-                ),
+                sorted(self.repository.languages),
 
             "frameworks":
-
-                sorted(
-                    self.repository.frameworks
-                ),
+                sorted(self.repository.frameworks),
 
             "databases":
-
-                sorted(
-                    self.repository.databases
-                ),
+                sorted(self.repository.databases),
 
             "vector_databases":
-
-                sorted(
-                    self.repository.vector_databases
-                ),
+                sorted(self.repository.vector_databases),
 
             "llm_frameworks":
-
-                sorted(
-                    self.repository.llm_frameworks
-                ),
+                sorted(self.repository.llm_frameworks),
 
             "llm_providers":
-
-                sorted(
-                    self.repository.llm_providers
-                ),
+                sorted(self.repository.llm_providers),
 
             "dependencies":
-
-                sorted(
-                    self.repository.dependencies
-                ),
+                sorted(self.repository.dependencies),
 
             "modules":
-
-                sorted(
-                    self.repository.modules
-                ),
-
-            "architecture":
-
-                self.repository.architecture,
+                sorted(self.repository.modules),
 
             "design_patterns":
-
-                sorted(
-                    self.repository.design_patterns
-                ),
-
-            "summary":
-
-                self.repository.summary,
+                sorted(self.repository.design_patterns),
         }
+
+    # =====================================================
+    # Repository Summary
+    # =====================================================
+
+    def get_summary(self):
+
+        profile = self.get_repository_profile()
+
+        return f"""
+Repository Name
+---------------
+{profile["repository_name"]}
+
+Summary
+-------
+{SYSTEM_SUMMARY.strip()}
+
+Repository Statistics
+---------------------
+Files: {profile["statistics"]["files"]}
+Classes: {profile["statistics"]["classes"]}
+Functions: {profile["statistics"]["functions"]}
+Imports: {profile["statistics"]["imports"]}
+
+Languages
+---------
+{", ".join(profile["languages"]) or "None"}
+
+Frameworks
+----------
+{", ".join(profile["frameworks"]) or "None"}
+
+Databases
+---------
+{", ".join(profile["databases"]) or "None"}
+
+Vector Databases
+----------------
+{", ".join(profile["vector_databases"]) or "None"}
+
+LLM Frameworks
+--------------
+{", ".join(profile["llm_frameworks"]) or "None"}
+
+LLM Providers
+-------------
+{", ".join(profile["llm_providers"]) or "None"}
+
+Modules
+-------
+{", ".join(profile["modules"]) or "None"}
+"""
+    # =====================================================
+    # Architecture
+    # =====================================================
+
+        # =====================================================
+    # Architecture
+    # =====================================================
+
+    def get_architecture(self):
+
+        profile = self.get_repository_profile()
+
+        indexing_pipeline = "\n".join(
+            f"  {i + 1}. {step}"
+            for i, step in enumerate(INDEXING_PIPELINE)
+        )
+
+        qa_pipeline = "\n".join(
+            f"  {i + 1}. {step}"
+            for i, step in enumerate(QUESTION_ANSWERING_PIPELINE)
+        )
+
+        return f"""
+Repository Architecture
+=======================
+
+Repository Information
+----------------------
+
+Repository:
+{profile["repository_name"]}
+
+Primary Language:
+{", ".join(profile["languages"]) or "Unknown"}
+
+Frameworks:
+{", ".join(profile["frameworks"]) or "None"}
+
+Databases:
+{", ".join(profile["databases"]) or "None"}
+
+Vector Databases:
+{", ".join(profile["vector_databases"]) or "None"}
+
+Modules:
+{", ".join(profile["modules"]) or "None"}
+
+----------------------------------------------------
+Indexing Pipeline
+----------------------------------------------------
+
+{indexing_pipeline}
+
+----------------------------------------------------
+Question Answering Pipeline
+----------------------------------------------------
+
+{qa_pipeline}
+
+----------------------------------------------------
+Knowledge Sources
+----------------------------------------------------
+
+• AST Extraction
+• Semantic Chunks
+• ChromaDB Vector Store
+• BM25 Index
+• Neo4j Knowledge Graph
+• Repository Metadata
+
+----------------------------------------------------
+System Summary
+----------------------------------------------------
+
+{SYSTEM_SUMMARY.strip()}
+"""
+
+    # =====================================================
+    # Statistics
+    # =====================================================
+
+    def get_statistics(self):
+
+        return self.get_repository_profile()["statistics"]
+
+    # =====================================================
+    # Modules
+    # =====================================================
+
+    def get_modules(self):
+
+        return self.get_repository_profile()["modules"]
+
+    # =====================================================
+    # Services
+    # =====================================================
+
+    def get_services(self):
+
+        modules = self.get_repository_profile()["modules"]
+
+        return [
+            module
+            for module in modules
+            if "service" in module.lower()
+        ]
+
+    # =====================================================
+    # Routes
+    # =====================================================
+
+    def get_routes(self):
+
+        return []
+
+    # =====================================================
+    # Models
+    # =====================================================
+
+    def get_models(self):
+
+        modules = self.get_repository_profile()["modules"]
+
+        return [
+            module
+            for module in modules
+            if "model" in module.lower()
+        ]
+
+    # =====================================================
+    # Frameworks
+    # =====================================================
+
+    def get_frameworks(self):
+
+        return self.get_repository_profile()["frameworks"]
+
+    # =====================================================
+    # Dependencies
+    # =====================================================
+
+    def get_dependencies(self):
+
+        return self.get_repository_profile()["dependencies"]
+
+    # =====================================================
+    # Languages
+    # =====================================================
+
+    def get_languages(self):
+
+        return self.get_repository_profile()["languages"]

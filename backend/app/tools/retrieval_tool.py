@@ -7,19 +7,18 @@ class RetrievalTool:
         self,
         retrieval_service: RetrievalService,
     ):
-
         self.retrieval_service = retrieval_service
 
     def execute(
         self,
-        question: str,
+        query: str,
     ) -> str:
 
         print("\n========== RETRIEVAL TOOL ==========")
-        print("Question:", question)
+        print("Retrieval Query:", query)
 
         result = self.retrieval_service.retrieve(
-            question
+            query
         )
 
         print("\nRetrieved Context:")

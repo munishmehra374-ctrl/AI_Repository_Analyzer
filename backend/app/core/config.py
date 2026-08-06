@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     NEO4J_USERNAME: str
     NEO4J_PASSWORD: str
 
+     # Redis
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

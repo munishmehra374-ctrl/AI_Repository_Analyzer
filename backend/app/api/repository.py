@@ -10,6 +10,10 @@ from app.vectorstore.chroma_store import ChromaStore
 from app.vectorstore.retriever import RepositoryRetriever
 from app.graph.workflow import create_workflow
 from app.graph.dependencies import dependencies
+from app.worker.indexing_tasks import index_repository_task
+from celery.result import AsyncResult
+from app.worker.celery_app import celery
+from app.core.redis import redis_client
 
 router = APIRouter(
     prefix="/repositories",
@@ -57,14 +61,43 @@ def generate_chunks(file_path: str):
 @router.post("/index")
 def index_file(file_path: str):
 
-    result = indexing_service.index_repository(file_path)
+    task = index_repository_task.delay(file_path)
 
-    dependencies.initialize(
-        indexing_service.vector_store,
-        indexing_service.bm25_index
-    )
+    return {
+        "task_id": task.id,
+        "status": "queued"
+    }
 
-    return result
+@router.get("/status/{task_id}")
+def get_task_status(task_id: str):
+
+    task = AsyncResult(task_id, app=celery)
+
+    response = {
+        "task_id": task.id,
+        "status": task.status,
+    }
+
+    if task.successful():
+        response["result"] = task.result
+
+    elif task.failed():
+        response["error"] = str(task.result)
+
+    return response
+
+@router.get("/progress/{task_id}")
+def get_progress(task_id: str):
+ 
+    progress = redis_client.hgetall(task_id)
+
+    if not progress:
+        return {
+            "message": "Task not found"
+        }
+
+    return progress
+
 
 @router.get("/search")
 def search(question: str):

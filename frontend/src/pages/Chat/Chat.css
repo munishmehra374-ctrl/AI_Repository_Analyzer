@@ -1,0 +1,14 @@
+.chat-page{
+
+    display:flex;
+
+    flex-direction:column;
+
+    height:100%;
+
+    padding:35px;
+
+    gap:24px;
+
+    background:#070b14;
+}

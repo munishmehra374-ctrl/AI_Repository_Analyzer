@@ -8,10 +8,17 @@ from app.services.llm_service import LLMService
 
 
 class PlannerNode:
-    def __init__(self, llm_service: LLMService):
+
+    def __init__(
+        self,
+        llm_service: LLMService,
+    ):
         self.llm = llm_service
 
-    def __call__(self, state: GraphState):
+    def __call__(
+        self,
+        state: GraphState,
+    ):
 
         prompt = PLANNER_PROMPT.format(
             repository_uploaded=state["repository_uploaded"],
@@ -21,6 +28,12 @@ class PlannerNode:
             question=state["question"],
         )
 
+        print("\n" + "=" * 80)
+        print("PLANNER NODE")
+        print("=" * 80)
+        print("Question:")
+        print(state["question"])
+
         response = self.llm.invoke(
             [
                 SystemMessage(content=prompt),
@@ -28,16 +41,50 @@ class PlannerNode:
             ]
         )
 
-        print("\n========== PLANNER RESPONSE ==========")
+        print("\nRAW RESPONSE:")
         print(response)
-        print(type(response))
-        print("======================================\n")
 
-        response = response.replace("```json", "").replace("```", "").strip()
+        response = (
+            response.replace("```json", "")
+            .replace("```", "")
+            .strip()
+        )
 
-        decision = json.loads(response)
+        print("\nCLEANED RESPONSE:")
+        print(response)
 
-        state["question_type"] = decision["question_type"]
-        state["needs_retrieval"] = decision["needs_retrieval"]
+        try:
+            decision = json.loads(response)
+
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Planner returned invalid JSON:\n{response}"
+            ) from e
+
+        print("\nPARSED DECISION:")
+        print(decision)
+
+        state["question_type"] = decision.get(
+            "question_type",
+            "repository",
+        )
+
+        state["tools"] = decision.get(
+            "tools",
+            [],
+        )
+
+        state["reason"] = decision.get(
+            "reason",
+            "",
+        )
+
+        print("\nSELECTED TOOLS:")
+        print(state["tools"])
+
+        print("\nREASON:")
+        print(state["reason"])
+
+        print("=" * 80 + "\n")
 
         return state

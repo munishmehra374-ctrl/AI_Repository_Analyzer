@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+
     PROJECT_NAME: str = "Repository Intelligence Platform"
 
     LOG_LEVEL: str = "INFO"
@@ -16,12 +17,24 @@ class Settings(BaseSettings):
     TEMPERATURE: float = 0.2
     MAX_TOKENS: int = 4096
 
+    # Neo4j
+    NEO4J_URI: str
+    NEO4J_USERNAME: str
+    NEO4J_PASSWORD: str
+
+     # Redis
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
     )
 
-
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+settings = get_settings()

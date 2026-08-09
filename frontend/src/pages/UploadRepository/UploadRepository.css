@@ -1,0 +1,187 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+.upload-container{
+    width:100%;
+    height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    position:relative;
+    overflow:hidden;
+    background:#07090f;
+}
+
+/* Blue Glow */
+
+.upload-container::before{
+    content:"";
+    position:absolute;
+    width:850px;
+    height:850px;
+    background:radial-gradient(
+        circle,
+        rgba(37,99,235,.42) 0%,
+        rgba(37,99,235,.18) 35%,
+        rgba(37,99,235,.08) 58%,
+        transparent 80%
+    );
+    filter:blur(85px);
+    z-index:0;
+}
+
+/* Card */
+
+.upload-card{
+
+    width:620px;
+
+    padding:40px;
+
+    border-radius:22px;
+
+    background:rgba(15,18,27,.82);
+
+    backdrop-filter:blur(16px);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    box-shadow:
+        0 25px 70px rgba(0,0,0,.55),
+        inset 0 0 1px rgba(255,255,255,.18);
+
+    position:relative;
+
+    z-index:1;
+
+    transition:.35s;
+}
+
+.upload-card:hover{
+
+    transform:translateY(-4px);
+
+    box-shadow:
+        0 35px 90px rgba(0,0,0,.65),
+        0 0 35px rgba(37,99,235,.15);
+}
+
+/* Heading */
+
+.upload-card h1{
+
+    color:white;
+
+    font-size:56px;
+
+    font-weight:700;
+
+    text-align:center;
+
+    margin-bottom:14px;
+
+    line-height:1.15;
+}
+
+.upload-card h1 span{
+
+    color:#3b82f6;
+}
+
+/* Subtitle */
+
+.upload-card p{
+
+    text-align:center;
+
+    color:#aeb6c7;
+
+    font-size:18px;
+
+    margin-bottom:30px;
+
+    line-height:1.6;
+}
+
+/* Input */
+
+.upload-card input{
+
+    width:100%;
+
+    padding:17px 20px;
+
+    border-radius:14px;
+
+    border:1px solid #234db8;
+
+    background:#0b0f18;
+
+    color:white;
+
+    font-size:17px;
+
+    outline:none;
+
+    margin-bottom:18px;
+
+    transition:.3s;
+}
+
+.upload-card input::placeholder{
+
+    color:#7f8797;
+}
+
+.upload-card input:focus{
+
+    border-color:#4f82ff;
+
+    box-shadow:
+        0 0 20px rgba(37,99,235,.35);
+}
+
+/* Button */
+
+.upload-card button{
+
+    width:100%;
+
+    padding:16px;
+
+    border:none;
+
+    border-radius:14px;
+
+    font-size:19px;
+
+    font-weight:600;
+
+    color:white;
+
+    cursor:pointer;
+
+    background:linear-gradient(
+        90deg,
+        #2563eb,
+        #3b82f6
+    );
+
+    transition:.3s;
+}
+
+.upload-card button:hover{
+
+    transform:translateY(-2px);
+
+    box-shadow:
+        0 10px 30px rgba(37,99,235,.45);
+}
+
+.upload-card button:active{
+
+    transform:scale(.98);
+}

@@ -98,7 +98,15 @@ class CrossEncoderReranker:
             reranked_chunks.append(item)
 
         reranked_chunks.sort(
-            key=lambda chunk: chunk["cross_encoder_score"],
+            key=lambda chunk: (
+                bool(
+                    chunk.get(
+                        "is_exact_identifier_match",
+                         False,
+                    )
+                ),
+                chunk["cross_encoder_score"],
+            ),
             reverse=True,
         )
 

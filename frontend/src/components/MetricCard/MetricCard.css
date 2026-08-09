@@ -1,0 +1,35 @@
+.metric-card{
+
+    background:#10192b;
+
+    border:1px solid rgba(255,255,255,.06);
+
+    border-radius:18px;
+
+    padding:24px;
+
+    transition:.3s;
+}
+
+.metric-card:hover{
+
+    transform:translateY(-3px);
+
+    border-color:#2563eb;
+}
+
+.metric-card span{
+
+    color:#94a3b8;
+
+    font-size:14px;
+}
+
+.metric-card h2{
+
+    color:white;
+
+    font-size:34px;
+
+    margin-top:10px;
+}

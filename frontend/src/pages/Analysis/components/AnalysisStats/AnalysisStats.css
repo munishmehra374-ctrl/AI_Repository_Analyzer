@@ -1,0 +1,79 @@
+.analysis-stats {
+    display: grid;
+
+    grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+
+    gap: 20px;
+
+    width: 100%;
+
+    margin-bottom: 32px;
+}
+
+.analysis-stat-card {
+    min-height: 110px;
+
+    padding: 24px;
+
+    box-sizing: border-box;
+
+    border: 1px solid rgba(148, 163, 184, 0.16);
+
+    border-radius: 20px;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(30, 64, 175, 0.22),
+            rgba(15, 23, 42, 0.65)
+        );
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+
+    transition:
+        transform 0.2s ease,
+        border-color 0.2s ease;
+}
+
+.analysis-stat-card:hover {
+    transform: translateY(-2px);
+
+    border-color:
+        rgba(56, 189, 248, 0.35);
+}
+
+.analysis-stat-label {
+    margin-bottom: 10px;
+
+    font-size: 13px;
+    font-weight: 500;
+
+    letter-spacing: 0.08em;
+
+    color: #94a3b8;
+}
+
+.analysis-stat-value {
+    font-size: 32px;
+    line-height: 1;
+
+    font-weight: 700;
+
+    color: #38bdf8;
+}
+
+@media (max-width: 1000px) {
+    .analysis-stats {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 600px) {
+    .analysis-stats {
+        grid-template-columns: 1fr;
+    }
+}

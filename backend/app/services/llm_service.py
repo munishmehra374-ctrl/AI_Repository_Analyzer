@@ -6,6 +6,7 @@ from typing import List
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,22 +33,40 @@ class LLMService:
         self,
         messages: List[BaseMessage],
     ) -> str:
-        """
-        Invoke the language model.
-
-        Parameters
-        ----------
-        messages:
-            Conversation messages.
-
-        Returns
-        -------
-        str
-            Generated response.
-        """
 
         logger.info("Invoking LLM.")
 
-        response = self._llm.invoke(messages)
+        print("\n========== LLM REQUEST ==========")
+
+        total_chars = 0
+
+        for message in messages:
+
+            content = message.content
+
+            print(
+                f"\nMessage type: {type(message).__name__}"
+            )
+
+            print(
+                f"Characters: {len(content)}"
+            )
+
+            total_chars += len(content)
+
+        print(
+            f"\nTOTAL REQUEST CHARACTERS: {total_chars}"
+        )
+
+        print(
+            "LLM TYPE:",
+            type(self._llm).__name__,
+        )
+
+        print("=================================\n")
+
+        response = self._llm.invoke(
+            messages
+        )
 
         return response.content

@@ -124,6 +124,13 @@ class FunctionExtractor:
                     source_code,
                 )
 
+                print(
+                    "FUNCTION:",
+                     function_name,
+                     "CALLS:",
+                     calls,
+                )
+
                 dependencies = self.dependency_extractor.extract(
                     child,
                     source_code,

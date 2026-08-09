@@ -32,13 +32,11 @@ class FileNode:
 
 @dataclass
 class ImportNode:
-
-    statement: str
-
+    statement: str   
     module: str | None = None
-
     alias: str | None = None
-
+    file_path: str | None = None
+    
 # ==========================================================
 # Classes
 # ==========================================================

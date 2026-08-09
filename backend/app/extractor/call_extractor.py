@@ -9,7 +9,6 @@ class CallExtractor:
 
     Examples
     --------
-
     foo()
 
     self.bar()
@@ -48,9 +47,9 @@ class CallExtractor:
         calls: list,
     ):
 
-        # --------------------------------------------
+        # ==================================================
         # Function Call
-        # --------------------------------------------
+        # ==================================================
 
         if node.type == "call":
 
@@ -60,9 +59,21 @@ class CallExtractor:
 
             if function_node:
 
-                # ------------------------------------
+                called_text = source_code[
+                    function_node.start_byte:
+                    function_node.end_byte
+                ]
+
+                print(
+                    "CALL DETECTED:",
+                    called_text,
+                )
+
+                # ==========================================
+                # Simple function
+                #
                 # foo()
-                # ------------------------------------
+                # ==========================================
 
                 if function_node.type == "identifier":
 
@@ -70,63 +81,59 @@ class CallExtractor:
                         {
                             "type": "function",
                             "object": None,
-                            "name": source_code[
-                                function_node.start_byte:
-                                function_node.end_byte
-                            ],
+                            "name": called_text,
+                            "full_name": called_text,
                         }
                     )
 
-                # ------------------------------------
-                # object.method()
-                # ------------------------------------
+                # ==========================================
+                # Method / attribute call
+                #
+                # self.foo()
+                # service.foo()
+                # self.service.foo()
+                # ==========================================
 
                 elif function_node.type == "attribute":
 
-                    identifiers = []
+                    full_name = called_text
 
-                    for child in function_node.children:
+                    parts = full_name.split(".")
 
-                        if child.type == "identifier":
+                    method_name = parts[-1]
 
-                            identifiers.append(
-
-                                source_code[
-                                    child.start_byte:
-                                    child.end_byte
-                                ]
-
-                            )
-
-                    object_name = None
-                    method_name = None
-
-                    if len(identifiers) >= 2:
-
-                        object_name = identifiers[0]
-
-                        method_name = identifiers[-1]
-
-                    elif len(identifiers) == 1:
-
-                        method_name = identifiers[0]
+                    object_name = (
+                        ".".join(parts[:-1])
+                        if len(parts) > 1
+                        else None
+                    )
 
                     calls.append(
                         {
                             "type": "method",
                             "object": object_name,
                             "name": method_name,
+                            "full_name": full_name,
                         }
                     )
 
-        # --------------------------------------------
+                    print(
+                        "METHOD CALL:",
+                        full_name,
+                        "| OBJECT:",
+                        object_name,
+                        "| METHOD:",
+                        method_name,
+                    )
+
+        # ==================================================
         # Continue Traversal
-        # --------------------------------------------
+        # ==================================================
 
         for child in node.children:
 
             self._extract_calls(
-                child,
-                source_code,
-                calls,
+                node=child,
+                source_code=source_code,
+                calls=calls,
             )

@@ -60,7 +60,7 @@ class DependencyContainer:
             hybrid_retriever=hybrid_retriever,
             rrf=ReciprocalRankFusion(),
             reranker=CrossEncoderReranker(),
-            context_optimizer=ContextOptimizer(),
+            context_optimizer=ContextOptimizer(  max_chunks=2),
         )
 
         # ---------------- Knowledge ----------------

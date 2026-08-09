@@ -4,6 +4,7 @@ from neo4j import GraphDatabase
 
 from app.core.config import settings
 
+import os
 
 class GraphQueries:
     """
@@ -89,9 +90,33 @@ class GraphQueries:
             return record["f"] if record else None
 
     # =====================================================
-    # File Classes
+    # File By Name
     # =====================================================
 
+    def get_file_by_name(
+        self,
+        file_name: str,
+    ):
+
+        query = """
+        MATCH (f:File {name:$name})
+        RETURN f
+        LIMIT 1
+        """
+
+        with self.driver.session() as session:
+
+            record = session.run(
+                query,
+                name=file_name,
+            ).single()
+
+            return record["f"] if record else None
+
+    # =====================================================
+    # File Classes
+    # =====================================================
+    
     def get_file_classes(
         self,
         file_path: str,
@@ -111,11 +136,8 @@ class GraphQueries:
             )
 
             return [
-
                 record["class"]
-
                 for record in result
-
             ]
 
     # =====================================================
@@ -141,11 +163,8 @@ class GraphQueries:
             )
 
             return [
-
                 record["function"]
-
                 for record in result
-
             ]
 
     # =====================================================
@@ -195,11 +214,8 @@ class GraphQueries:
             )
 
             return [
-
                 record["method"]
-
                 for record in result
-
             ]
 
     # =====================================================
@@ -225,11 +241,8 @@ class GraphQueries:
             )
 
             return [
-
                 record["parent"]
-
                 for record in result
-
             ]
 
     # =====================================================
@@ -255,11 +268,8 @@ class GraphQueries:
             )
 
             return [
-
                 record["child"]
-
                 for record in result
-
             ]
 
     # =====================================================
@@ -272,9 +282,11 @@ class GraphQueries:
     ):
 
         query = """
-        MATCH (f:Function {name:$name})
-
+        MATCH (f:Function)
+        WHERE f.name = $name
+           OR f.qualified_name = $name
         RETURN f
+        LIMIT 1
         """
 
         with self.driver.session() as session:
@@ -296,7 +308,10 @@ class GraphQueries:
     ):
 
         query = """
-        MATCH (f:Function {name:$name})-[:CALLS]->(called)
+        MATCH (f:Function)
+        WHERE f.name = $name
+           OR f.qualified_name = $name
+        MATCH (f)-[:CALLS]->(called)
 
         RETURN called.name AS function
         """
@@ -309,11 +324,8 @@ class GraphQueries:
             )
 
             return [
-
                 record["function"]
-
                 for record in result
-
             ]
 
     # =====================================================
@@ -326,7 +338,10 @@ class GraphQueries:
     ):
 
         query = """
-        MATCH (caller)-[:CALLS]->(f:Function {name:$name})
+        MATCH (f:Function)
+        WHERE f.name = $name
+           OR f.qualified_name = $name
+        MATCH (caller:Function)-[:CALLS]->(f)
 
         RETURN caller.name AS function
         """
@@ -338,103 +353,275 @@ class GraphQueries:
                 name=qualified_name,
             )
 
-            return [
-
+            rows = [
                 record["function"]
-
                 for record in result
-
             ]
-# =====================================================
-# Imports
-# =====================================================
 
-def get_imports(
-    self,
-    file_path: str,
-):
+        print("\n========== CALLED BY ==========")
+        print("Target:", qualified_name)
+        print("CALLERS:", rows)
+        print("================================\n")
 
-    query = """
-    MATCH (f:File {path:$path})-[:IMPORTS]->(i:Import)
+        return rows
 
-    RETURN i.statement AS import_statement
-    """
+    # =====================================================
+    # Imports
+    # =====================================================
 
-    with self.driver.session() as session:
+    def get_imports(
+        self,
+        file_path: str,
+    ):
 
-        result = session.run(
-            query,
-            path=file_path,
+        query = """
+        MATCH (f:File {path:$path})-[:IMPORTS]->(i:Import)
+
+        RETURN i.statement AS import_statement
+        """
+
+        with self.driver.session() as session:
+
+            result = session.run(
+                query,
+                path=file_path,
+            )
+
+            return [
+                record["import_statement"]
+                for record in result
+            ]
+
+    # =====================================================
+    # Files Importing A File
+    # =====================================================
+    # =====================================================
+    # Files Importing A File
+    # =====================================================
+
+    def get_files_importing(
+        self,
+        file_name: str,
+    ):
+
+        print("\n========== GET FILES IMPORTING ==========")
+        print("SEARCHING FOR:", file_name)
+
+        filename = os.path.basename(
+            file_name
         )
 
-        return [
+        module_name = os.path.splitext(
+            filename
+        )[0]
 
-            record["import_statement"]
+        print(
+            "FILENAME:",
+            filename,
+        )
 
-            for record in result
+        print(
+            "SEARCHING MODULE:",
+            module_name,
+        )
 
-        ]
+        query = """
+        MATCH (f:File)-[:IMPORTS]->(i:Import)
+
+        WHERE toLower(i.statement) CONTAINS toLower($module_name)
+           OR (
+                i.module IS NOT NULL
+                AND toLower(i.module) CONTAINS toLower($module_name)
+              )
+
+        RETURN f.path AS file
+        ORDER BY file
+        """
+
+        with self.driver.session() as session:
+
+            result = session.run(
+                query,
+                module_name=module_name,
+            )
+
+            rows = [
+                record["file"]
+                for record in result
+            ]
+
+        print(
+            "FOUND IMPORTERS:",
+            rows,
+        )
+
+        print(
+            "========================================\n"
+        )
+
+        return rows
+
+    # =====================================================
+    # Class Dependencies
+    # =====================================================
+
+    def get_class_dependencies(
+        self,
+        class_name: str,
+    ):
+
+        query = """
+        MATCH (c:Class {name:$name})-[:DEPENDS_ON]->(dependency)
+
+        RETURN dependency.name AS dependency
+        """
+
+        with self.driver.session() as session:
+
+            result = session.run(
+                query,
+                name=class_name,
+            )
+
+            return [
+                record["dependency"]
+                for record in result
+            ]
+
+    # =====================================================
+    # Dependent Classes
+    # =====================================================
+
+    def get_dependent_classes(
+        self,
+        class_name: str,
+    ):
+
+        query = """
+        MATCH (dependency:Class {name:$name})<-[:DEPENDS_ON]-(cls)
+
+        RETURN cls.name AS dependent
+        """
+
+        with self.driver.session() as session:
+
+            result = session.run(
+                query,
+                name=class_name,
+            )
+
+            return [
+                record["dependent"]
+                for record in result
+            ]
+
 
 
     # =====================================================
-# Class Dependencies
-# =====================================================
+    # Graph Statistics
+    # =====================================================
 
-def get_class_dependencies(
-    self,
-    class_name: str,
-):
+    def get_graph_statistics(self):
 
-    query = """
-    MATCH (c:Class {name:$name})-[:DEPENDS_ON]->(dependency)
+        query = """
+        MATCH (n)
+        WITH
+            count(CASE WHEN n:File THEN 1 END) AS files,
+            count(CASE WHEN n:Class THEN 1 END) AS classes,
+            count(CASE WHEN n:Function THEN 1 END) AS functions
 
-    RETURN dependency.name AS dependency
-    """
+        OPTIONAL MATCH ()-[r]->()
 
-    with self.driver.session() as session:
+        RETURN
+            files,
+            classes,
+            functions,
+            count(r) AS relationships
+        """
 
-        result = session.run(
-            query,
-            name=class_name,
-        )
+        with self.driver.session() as session:
 
-        return [
+            record = session.run(
+                query
+            ).single()
 
-            record["dependency"]
+            if not record:
+                return {
+                    "files": 0,
+                    "classes": 0,
+                    "functions": 0,
+                    "relationships": 0,
+                }
 
-            for record in result
+            return {
+                "files": record["files"],
+                "classes": record["classes"],
+                "functions": record["functions"],
+                "relationships": record["relationships"],
+            }
 
-        ]
 
+        # =====================================================
+    # Repository Dependency Graph
+    # =====================================================
+
+    def get_dependency_graph(self):
+
+        query = """
+        MATCH (source)-[r]->(target)
+
+        RETURN
+            elementId(source) AS source_id,
+            labels(source)[0] AS source_type,
+            coalesce(source.name, source.path) AS source,
+            type(r) AS relationship,
+            elementId(target) AS target_id,
+            labels(target)[0] AS target_type,
+            coalesce(target.name, target.path) AS target
+
+        ORDER BY source, target
+        """
+
+        with self.driver.session() as session:
+
+            result = session.run(query)
+
+            return [
+                dict(record)
+                for record in result
+            ]
 
     # =====================================================
-# Dependent Classes
-# =====================================================
+    # DEBUG FUNCTIONS
+    # =====================================================
 
-def get_dependent_classes(
-    self,
-    class_name: str,
-):
+    def debug_functions(
+        self,
+    ):
 
-    query = """
-    MATCH (dependency:Class {name:$name})<-[:DEPENDS_ON]-(cls)
+        query = """
+        MATCH (f:Function)
+        RETURN
+            f.name AS name,
+            f.qualified_name AS qualified_name
+        ORDER BY name
+        """
 
-    RETURN cls.name AS dependent
-    """
+        with self.driver.session() as session:
 
-    with self.driver.session() as session:
+            result = session.run(query)
 
-        result = session.run(
-            query,
-            name=class_name,
-        )
+            rows = [
+                dict(record)
+                for record in result
+            ]
 
-        return [
+        print("\n========== NEO4J FUNCTIONS ==========")
 
-            record["dependent"]
+        for row in rows:
+            print(row)
 
-            for record in result
+        print("TOTAL FUNCTIONS:", len(rows))
+        print("====================================\n")
 
-        ]
-
-    
+        return rows

@@ -23,9 +23,35 @@ class GraphTool:
         print("\n========== GRAPH TOOL ==========")
         print("Graph Query:", query)
 
-        entity = self.entity_resolver.resolve(
-            query
-        )
+        entity = self.entity_resolver.resolve(query)
+
+        print("Resolved Entity:")
+        print(entity)
+
+        # =====================================================
+        # Files Importing File
+        # =====================================================
+
+        if (
+            "which files import" in query.lower()
+            or "what files import" in query.lower()
+            or "which file imports" in query.lower()
+            or "who imports" in query.lower()
+        ):
+
+            if entity and entity["type"] == "file":
+
+                return self._files_importing_context(
+                    entity["name"]
+                )
+
+        if entity is None:
+
+            print("No entity resolved.")
+
+            return "No graph information found."
+
+        print("Entity Type:", entity["type"])
 
         if entity["type"] == "function":
 
@@ -116,6 +142,10 @@ Called By:
             class_name
         )
 
+        dependent_classes = self.graph.get_dependent_classes(
+            class_name
+        )
+
         return f"""
 Class:
 {class_name}
@@ -131,6 +161,9 @@ Child Classes:
 
 Dependencies:
 {", ".join(dependencies) if dependencies else "None"}
+
+Dependent Classes:
+{", ".join(dependent_classes) if dependent_classes else "None"}
 """
 
     # =====================================================
@@ -169,6 +202,27 @@ Imports:
 """
 
     # =====================================================
+    # Files Importing File
+    # =====================================================
+
+    def _files_importing_context(
+        self,
+        file_name: str,
+    ):
+
+        files = self.graph.get_files_importing(
+            file_name
+        )
+
+        return f"""
+File:
+{file_name}
+
+Imported By:
+{", ".join(files) if files else "None"}
+"""
+
+    # =====================================================
     # Repository
     # =====================================================
 
@@ -189,7 +243,6 @@ Imports:
             )
 
         lines.append("")
-
         lines.append("Structure:")
 
         for folder in structure:

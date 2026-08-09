@@ -11,6 +11,7 @@ class Neo4jStore:
     """
 
     def __init__(self):
+
         self.driver = GraphDatabase.driver(
             settings.NEO4J_URI,
             auth=(
@@ -20,6 +21,7 @@ class Neo4jStore:
         )
 
     def close(self):
+
         self.driver.close()
 
     # =====================================================
@@ -120,6 +122,7 @@ class Neo4jStore:
                 path=folder.path,
                 name=folder.name,
             )
+
     # =====================================================
     # File
     # =====================================================
@@ -163,7 +166,11 @@ class Neo4jStore:
                     i.module=$module
                 """,
                 statement=imp.statement,
-                module=getattr(imp, "module", None),
+                module=getattr(
+                    imp,
+                    "module",
+                    None,
+                ),
             )
 
     # =====================================================
@@ -193,7 +200,7 @@ class Neo4jStore:
                 end_line=cls.end_line,
             )
 
-    # =====================================================
+                # =====================================================
     # Functions
     # =====================================================
 
@@ -207,15 +214,19 @@ class Neo4jStore:
 
             session.run(
                 """
-                MERGE (f:Function {name:$name})
+                MERGE (f:Function {
+                    qualified_name:$qualified_name
+                })
 
                 SET
+                    f.name=$name,
                     f.file_path=$file_path,
                     f.class_name=$class_name,
                     f.start_line=$start_line,
                     f.end_line=$end_line
                 """,
-                name=function.qualified_name,
+                qualified_name=function.qualified_name,
+                name=function.name,
                 file_path=function.file_path,
                 class_name=function.class_name,
                 start_line=function.start_line,
@@ -248,7 +259,6 @@ class Neo4jStore:
                 method=route.method,
                 handler=route.handler,
             )
-
     # =====================================================
     # Models
     # =====================================================
@@ -308,21 +318,21 @@ class Neo4jStore:
             "HAS_FUNCTION":
             """
             MATCH (a:File {path:$source})
-            MATCH (b:Function {name:$target})
+            MATCH (b:Function {qualified_name:$target})
             MERGE (a)-[:HAS_FUNCTION]->(b)
             """,
 
             "HAS_METHOD":
             """
             MATCH (a:Class {name:$source})
-            MATCH (b:Function {name:$target})
+            MATCH (b:Function {qualified_name:$target})
             MERGE (a)-[:HAS_METHOD]->(b)
             """,
 
             "CALLS":
             """
-            MATCH (a:Function {name:$source})
-            MATCH (b:Function {name:$target})
+            MATCH (a:Function {qualified_name:$source})
+            MATCH (b:Function {qualified_name:$target})
             MERGE (a)-[:CALLS]->(b)
             """,
 
@@ -354,10 +364,20 @@ class Neo4jStore:
                 relationship.relationship_type
             )
 
-            if query:
+            if not query:
+                continue
 
-                session.run(
-                    query,
-                    source=relationship.source,
-                    target=relationship.target,
-                )
+            print(
+                "STORING RELATIONSHIP:",
+                relationship.relationship_type,
+                "|",
+                relationship.source,
+                "->",
+                relationship.target,
+            )
+
+            session.run(
+                query,
+                source=relationship.source,
+                target=relationship.target,
+            )

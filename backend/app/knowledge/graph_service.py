@@ -9,10 +9,17 @@ class GraphService:
         self.builder = GraphBuilder()
         self.neo4j = Neo4jStore()
 
-    def build_graph(self, extracted_data: dict):
+    def build_graph(
+        self,
+        extracted_files: list[dict],
+    ):
 
-        graph = self.builder.build(extracted_data)
+        graph = self.builder.build_repository(
+            extracted_files
+        )
 
-        self.neo4j.store_graph(graph)
+        self.neo4j.store_graph(
+            graph
+        )
 
         return graph

@@ -24,16 +24,36 @@ class RepositoryRetriever:
         print("\n========== VECTOR SEARCH ==========")
 
         if not docs:
+
             print("No documents found.")
+
         else:
-            print("Number of documents:", len(docs))
 
-            print("\n----- First Document Metadata -----")
-            print(docs[0].metadata)
+            print(
+                "Number of documents:",
+                len(docs)
+            )
 
-            print("\n----- First 300 Characters -----")
-            print(repr(docs[0].page_content[:300]))
+            print(
+                "\n----- First Document Metadata -----"
+            )
 
-        print("===================================\n")
+            print(
+                docs[0].metadata
+            )
+
+            print(
+                "\n----- First 300 Characters -----"
+            )
+
+            print(
+                repr(
+                    docs[0].page_content[:300]
+                )
+            )
+
+        print(
+            "===================================\n"
+        )
 
         return docs

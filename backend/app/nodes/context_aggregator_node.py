@@ -13,6 +13,7 @@ class ContextAggregatorNode:
         context_sections = []
 
         seen = set()
+
         # =====================================================
         # Repository Context
         # =====================================================
@@ -27,20 +28,35 @@ class ContextAggregatorNode:
         if repository_context:
 
             if not isinstance(repository_context, str):
-                repository_context = str(repository_context)
+                repository_context = str(
+                    repository_context
+                )
+
+            repository_context = (
+                repository_context.strip()
+            )
 
             if (
-                repository_context.strip()
+                repository_context
                 and repository_context not in seen
             ):
 
                 seen.add(repository_context)
 
                 context_sections.append(
-                    "========== REPOSITORY CONTEXT ==========\n"
-                    f"{repository_context}"
+                    """
+====================================================
+REPOSITORY CONTEXT
+====================================================
+
+This context contains repository-level information
+such as project structure, technologies, services,
+frameworks and repository metadata.
+
+"""
+                    + repository_context
                 )
-                
+
         # =====================================================
         # Graph Context
         # =====================================================
@@ -55,18 +71,33 @@ class ContextAggregatorNode:
         if graph_context:
 
             if not isinstance(graph_context, str):
-                graph_context = str(graph_context)
+                graph_context = str(
+                    graph_context
+                )
+
+            graph_context = (
+                graph_context.strip()
+            )
 
             if (
-                graph_context.strip()
+                graph_context
                 and graph_context not in seen
             ):
 
                 seen.add(graph_context)
 
                 context_sections.append(
-                    "========== GRAPH CONTEXT ==========\n"
-                    f"{graph_context}"
+                    """
+====================================================
+KNOWLEDGE GRAPH CONTEXT
+====================================================
+
+This context contains structural relationships
+between repository entities such as functions,
+classes, dependencies, inheritance and imports.
+
+"""
+                    + graph_context
                 )
 
         # =====================================================
@@ -83,27 +114,49 @@ class ContextAggregatorNode:
         if retrieval_context:
 
             if not isinstance(retrieval_context, str):
-                retrieval_context = str(retrieval_context)
+                retrieval_context = str(
+                    retrieval_context
+                )
+
+            retrieval_context = (
+                retrieval_context.strip()
+            )
 
             if (
-                retrieval_context.strip()
+                retrieval_context
                 and retrieval_context not in seen
             ):
 
                 seen.add(retrieval_context)
 
                 context_sections.append(
-                    "========== CODE CONTEXT ==========\n"
-                    f"{retrieval_context}"
+                    """
+====================================================
+CODE RETRIEVAL CONTEXT
+====================================================
+
+This context contains code retrieved from the
+repository using semantic and keyword search.
+
+"""
+                    + retrieval_context
                 )
 
         # =====================================================
         # Final Context
         # =====================================================
 
-        state["context"] = "\n\n".join(
-            context_sections
-        )
+        if context_sections:
+
+            state["context"] = "\n\n".join(
+                context_sections
+            )
+
+        else:
+
+            state["context"] = (
+                "No repository context was found."
+            )
 
         print("\n========== FINAL CONTEXT ==========")
         print(state["context"])

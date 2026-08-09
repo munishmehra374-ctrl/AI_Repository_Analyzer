@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 
 from app.knowledge.models import (
@@ -11,20 +12,20 @@ from app.knowledge.models import (
 class ImportAnalyzer:
     """
     Converts Python import statements into
-    IMPORTS relationships.
+    IMPORTS relationships between File nodes.
 
     Example
     -------
 
-    from app.services.graph_service import GraphService
+    from app.knowledge.graph_service import GraphService
 
-    becomes
+    becomes:
 
-    current_file.py
+    indexing_service.py
         |
-    IMPORTS
+      IMPORTS
         |
-    app.services.graph_service
+    graph_service.py
     """
 
     def analyze(
@@ -41,18 +42,38 @@ class ImportAnalyzer:
 
             for module in imports:
 
+                target_file = self._resolve_module_to_file(
+                    graph,
+                    module,
+                )
+
+                if target_file is None:
+                    continue
+
+                # Avoid duplicate relationships
+                already_exists = any(
+                    relationship.source == file.path
+                    and relationship.target == target_file
+                    and relationship.relationship_type == "IMPORTS"
+                    for relationship in graph.relationships
+                )
+
+                if already_exists:
+                    continue
+
                 graph.relationships.append(
-
                     Relationship(
-
                         source=file.path,
-
-                        target=module,
-
+                        target=target_file,
                         relationship_type="IMPORTS",
-
                     )
+                )
 
+                print(
+                    "FILE IMPORT RELATIONSHIP:",
+                    file.path,
+                    "->",
+                    target_file,
                 )
 
         return graph
@@ -71,11 +92,15 @@ class ImportAnalyzer:
 
         for import_node in graph.imports.values():
 
+            # IMPORTANT:
+            # Only use imports belonging to this file.
+            if import_node.file_path != file_path:
+                continue
+
             statement = import_node.statement
 
             # ------------------------------------------
-            # import os
-            # import numpy as np
+            # import app.knowledge.graph_service
             # ------------------------------------------
 
             match = re.match(
@@ -92,7 +117,7 @@ class ImportAnalyzer:
                 continue
 
             # ------------------------------------------
-            # from app.services.graph_service
+            # from app.knowledge.graph_service
             # import GraphService
             # ------------------------------------------
 
@@ -108,3 +133,53 @@ class ImportAnalyzer:
                 )
 
         return modules
+
+    # =====================================================
+    # Resolve Python module -> actual repository file
+    # =====================================================
+
+    def _resolve_module_to_file(
+        self,
+        graph: RepositoryGraph,
+        module: str,
+    ) -> str | None:
+
+        # ------------------------------------------
+        # app.knowledge.graph_service
+        #
+        # becomes:
+        #
+        # app/knowledge/graph_service.py
+        # ------------------------------------------
+
+        module_path = module.replace(
+            ".",
+            os.sep,
+        )
+
+        expected_path = (
+            module_path
+            + ".py"
+        )
+
+        # Normalize separators so this works
+        # with Windows paths as well.
+        expected_path = expected_path.replace(
+            "\\",
+            "/",
+        ).lower()
+
+        for file in graph.files.values():
+
+            actual_path = file.path.replace(
+                "\\",
+                "/",
+            ).lower()
+
+            if actual_path.endswith(
+                "/" + expected_path
+            ):
+
+                return file.path
+
+        return None

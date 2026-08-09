@@ -28,6 +28,12 @@ class PlannerNode:
             question=state["question"],
         )
 
+        print("\n" + "=" * 80)
+        print("PLANNER NODE")
+        print("=" * 80)
+        print("Question:")
+        print(state["question"])
+
         response = self.llm.invoke(
             [
                 SystemMessage(content=prompt),
@@ -35,9 +41,8 @@ class PlannerNode:
             ]
         )
 
-        print("\n========== PLANNER RAW RESPONSE ==========")
+        print("\nRAW RESPONSE:")
         print(response)
-        print("==========================================\n")
 
         response = (
             response.replace("```json", "")
@@ -45,9 +50,8 @@ class PlannerNode:
             .strip()
         )
 
-        print("\n========== CLEANED RESPONSE ==========")
+        print("\nCLEANED RESPONSE:")
         print(response)
-        print("======================================\n")
 
         try:
             decision = json.loads(response)
@@ -57,9 +61,8 @@ class PlannerNode:
                 f"Planner returned invalid JSON:\n{response}"
             ) from e
 
-        print("\n========== PLANNER DECISION ==========")
+        print("\nPARSED DECISION:")
         print(decision)
-        print("======================================\n")
 
         state["question_type"] = decision.get(
             "question_type",
@@ -76,10 +79,12 @@ class PlannerNode:
             "",
         )
 
-        print("\n========== STATE AFTER PLANNER ==========")
-        print("Question Type :", state["question_type"])
-        print("Tools         :", state["tools"])
-        print("Reason        :", state["reason"])
-        print("=========================================\n")
+        print("\nSELECTED TOOLS:")
+        print(state["tools"])
+
+        print("\nREASON:")
+        print(state["reason"])
+
+        print("=" * 80 + "\n")
 
         return state

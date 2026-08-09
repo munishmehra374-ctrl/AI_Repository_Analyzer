@@ -21,8 +21,10 @@ class EntityResolver:
         self,
         graph_queries: GraphQueries,
     ):
-
         self.graph = graph_queries
+
+        # Debug only
+        self.graph.debug_functions()
 
     # =====================================================
     # Public API
@@ -54,33 +56,69 @@ class EntityResolver:
         question: str,
     ):
 
-        match = re.search(
+        # =================================================
+        # Qualified function
+        # =================================================
 
-            r"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*",
-
+        qualified_matches = re.findall(
+            r"\b([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)\s*\(",
             question,
-
         )
 
-        if not match:
+        for qualified_name in qualified_matches:
 
-            return None
+            print(
+                "FUNCTION DETECTED:",
+                qualified_name,
+            )
 
-        qualified_name = match.group()
+            function = self.graph.get_function(
+                qualified_name
+            )
 
-        function = self.graph.get_function(
-            qualified_name
+            print(
+                "FUNCTION FROM NEO4J:",
+                function,
+            )
+
+            if function:
+
+                return {
+                    "type": "function",
+                    "name": qualified_name,
+                }
+
+        # =================================================
+        # Simple function
+        # =================================================
+
+        function_matches = re.findall(
+            r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(",
+            question,
         )
 
-        if function:
+        for function_name in function_matches:
 
-            return {
+            print(
+                "FUNCTION DETECTED:",
+                function_name,
+            )
 
-                "type": "function",
+            function = self.graph.get_function(
+                function_name
+            )
 
-                "name": qualified_name,
+            print(
+                "FUNCTION FROM NEO4J:",
+                function,
+            )
 
-            }
+            if function:
+
+                return {
+                    "type": "function",
+                    "name": function_name,
+                }
 
         return None
 
@@ -94,11 +132,8 @@ class EntityResolver:
     ):
 
         matches = re.findall(
-
             r"\b[A-Z][A-Za-z0-9_]+\b",
-
             question,
-
         )
 
         for class_name in matches:
@@ -110,11 +145,8 @@ class EntityResolver:
             if cls:
 
                 return {
-
                     "type": "class",
-
                     "name": class_name,
-
                 }
 
         return None
@@ -129,25 +161,36 @@ class EntityResolver:
     ):
 
         match = re.search(
-
-            r"[A-Za-z0-9_]+\.py",
-
+            r"\b[A-Za-z0-9_]+\.py\b",
             question,
-
         )
 
         if not match:
+            return None
 
+        file_name = match.group()
+
+        print(
+            "FILE DETECTED:",
+            file_name,
+        )
+
+        file = self.graph.get_file_by_name(
+            file_name
+        )
+
+        print(
+            "FILE FROM NEO4J:",
+            file,
+        )
+
+        if not file:
             return None
 
         return {
-
             "type": "file",
-
-            "name": match.group(),
-
+            "name": file["path"],
         }
-
     # =====================================================
     # Repository
     # =====================================================
@@ -158,31 +201,22 @@ class EntityResolver:
     ):
 
         keywords = [
-
             "repository",
-
             "project",
-
             "architecture",
-
             "structure",
-
             "overview",
-
         ]
 
-        question = question.lower()
+        question_lower = question.lower()
 
         for keyword in keywords:
 
-            if keyword in question:
+            if keyword in question_lower:
 
                 return {
-
                     "type": "repository",
-
                     "name": "repository",
-
                 }
 
         return None

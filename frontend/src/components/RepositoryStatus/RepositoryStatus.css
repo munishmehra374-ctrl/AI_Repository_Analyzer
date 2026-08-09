@@ -1,0 +1,111 @@
+.repository-status{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    gap:30px;
+
+    padding:26px 30px;
+
+    border-radius:22px;
+
+    background:rgba(255,255,255,.05);
+
+    backdrop-filter:blur(16px);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    box-shadow:0 10px 30px rgba(0,0,0,.25);
+}
+
+.status-left{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:18px;
+}
+
+.status-icon{
+
+    width:58px;
+
+    height:58px;
+
+    border-radius:16px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    font-size:26px;
+
+    background:#1d4ed8;
+}
+
+.status-left h2{
+
+    color:white;
+
+    margin-bottom:6px;
+
+    font-size:24px;
+}
+
+.status-left p{
+
+    color:#94a3b8;
+
+    font-size:14px;
+
+    max-width:520px;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+
+    white-space:nowrap;
+}
+
+.status-right{
+
+    display:grid;
+
+    grid-template-columns:repeat(2,170px);
+
+    gap:20px;
+}
+
+.status-item{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:6px;
+}
+
+.status-item span{
+
+    color:#94a3b8;
+
+    font-size:13px;
+}
+
+.status-item strong{
+
+    color:white;
+
+    font-size:15px;
+}
+
+.ready{
+
+    color:#22c55e !important;
+}

@@ -1,0 +1,124 @@
+.architecture-summary {
+    width: 100%;
+
+    margin-bottom: 32px;
+    padding: 28px;
+
+    box-sizing: border-box;
+
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 22px;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(30, 64, 175, 0.16),
+            rgba(15, 23, 42, 0.60)
+        );
+}
+
+.architecture-summary-header {
+    margin-bottom: 26px;
+}
+
+.architecture-summary-header h2 {
+    margin: 0 0 6px;
+
+    font-size: 22px;
+    font-weight: 700;
+
+    color: #f8fafc;
+}
+
+.architecture-summary-header p {
+    margin: 0;
+
+    font-size: 14px;
+    line-height: 1.5;
+
+    color: #94a3b8;
+}
+
+.architecture-content {
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+    gap: 18px;
+}
+
+.architecture-block {
+    padding: 20px;
+
+    border: 1px solid rgba(148, 163, 184, 0.10);
+    border-radius: 16px;
+
+    background: rgba(2, 6, 23, 0.28);
+}
+
+.architecture-block h3 {
+    margin: 0 0 16px;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    color: #cbd5e1;
+}
+
+.architecture-tags {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    gap: 8px;
+}
+
+.architecture-tag {
+    display: inline-flex;
+
+    align-items: center;
+
+    padding: 7px 11px;
+
+    border-radius: 999px;
+
+    background: rgba(37, 99, 235, 0.10);
+
+    border: 1px solid rgba(96, 165, 250, 0.20);
+
+    font-size: 12px;
+    font-weight: 500;
+
+    color: #93c5fd;
+}
+
+.architecture-pattern {
+    background: rgba(6, 182, 212, 0.08);
+
+    border-color: rgba(34, 211, 238, 0.20);
+
+    color: #67e8f9;
+}
+
+.architecture-empty {
+    font-size: 13px;
+
+    color: #64748b;
+}
+
+@media (max-width: 800px) {
+
+    .architecture-content {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+@media (max-width: 600px) {
+
+    .architecture-summary {
+        padding: 20px;
+    }
+
+}

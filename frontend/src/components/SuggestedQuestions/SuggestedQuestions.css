@@ -1,0 +1,34 @@
+.suggestion-grid{
+
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:20px;
+    margin-bottom:40px;
+
+}
+
+.suggestion-grid button{
+
+    background:#171f30;
+
+    border:1px solid #2d3f60;
+
+    color:white;
+
+    padding:22px;
+
+    border-radius:18px;
+
+    cursor:pointer;
+
+    text-align:left;
+
+    transition:.25s;
+
+}
+
+.suggestion-grid button:hover{
+
+    border-color:#3b82f6;
+
+}

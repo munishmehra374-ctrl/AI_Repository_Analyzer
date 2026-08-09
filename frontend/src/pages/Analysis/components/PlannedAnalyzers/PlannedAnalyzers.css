@@ -1,0 +1,131 @@
+.planned-analyzers {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.analysis-panel {
+  padding: 26px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.planned-analyzers-header {
+  margin-bottom: 24px;
+}
+
+.planned-analyzers-header h2 {
+  margin: 0 0 7px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.planned-analyzers-header p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.planned-analyzers-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.planned-analyzer-card {
+  position: relative;
+
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+
+  padding: 18px;
+
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 12px;
+
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.planned-analyzer-icon {
+  width: 34px;
+  height: 34px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 9px;
+
+  background: rgba(37, 99, 235, 0.08);
+
+  font-size: 20px;
+  color: #60a5fa;
+}
+
+.planned-analyzer-content {
+  min-width: 0;
+  padding-right: 60px;
+}
+
+.planned-analyzer-content h3 {
+  margin: 0 0 6px 0;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  color: #cbd5e1;
+}
+
+.planned-analyzer-content p {
+  margin: 0;
+
+  font-size: 12px;
+  line-height: 1.55;
+
+  color: #64748b;
+}
+
+.planned-analyzer-status {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+
+  padding: 4px 8px;
+
+  border-radius: 999px;
+
+  background: rgba(148, 163, 184, 0.08);
+
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+
+  color: #64748b;
+}
+
+/* Tablet */
+
+@media (max-width: 850px) {
+  .planned-analyzers-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile */
+
+@media (max-width: 650px) {
+  .planned-analyzer-content {
+    padding-right: 0;
+  }
+
+  .planned-analyzer-status {
+    position: static;
+    align-self: flex-start;
+  }
+}

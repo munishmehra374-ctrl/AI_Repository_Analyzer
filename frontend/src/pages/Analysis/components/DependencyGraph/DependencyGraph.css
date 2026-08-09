@@ -1,0 +1,220 @@
+.dependency-graph {
+    width: 100%;
+    margin-bottom: 32px;
+    padding: 28px;
+
+    box-sizing: border-box;
+
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 22px;
+
+    background: rgba(15, 23, 42, 0.65);
+}
+
+.dependency-graph-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    gap: 20px;
+
+    margin-bottom: 24px;
+}
+
+.dependency-graph-eyebrow {
+    display: block;
+
+    margin-bottom: 7px;
+
+    font-size: 11px;
+    font-weight: 700;
+
+    letter-spacing: 0.12em;
+
+    color: #38bdf8;
+}
+
+.dependency-graph-header h2 {
+    margin: 0 0 6px;
+
+    font-size: 22px;
+    font-weight: 700;
+
+    color: #f8fafc;
+}
+
+.dependency-graph-header p {
+    margin: 0;
+
+    font-size: 14px;
+
+    color: #94a3b8;
+}
+
+.dependency-graph-count {
+    padding: 8px 12px;
+
+    border-radius: 999px;
+
+    background: rgba(56, 189, 248, 0.08);
+
+    border: 1px solid rgba(56, 189, 248, 0.16);
+
+    font-size: 12px;
+    font-weight: 600;
+
+    color: #7dd3fc;
+}
+
+.dependency-graph-list {
+    display: flex;
+    flex-direction: column;
+
+    gap: 12px;
+
+    max-height: 600px;
+
+    overflow-y: auto;
+}
+
+.dependency-graph-row {
+    display: grid;
+
+    grid-template-columns:
+        minmax(0, 1fr)
+        180px
+        minmax(0, 1fr);
+
+    align-items: center;
+
+    gap: 20px;
+
+    padding: 16px;
+
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: 14px;
+
+    background: rgba(2, 6, 23, 0.28);
+}
+
+.dependency-node {
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 6px;
+}
+
+.dependency-node-type {
+    font-size: 10px;
+    font-weight: 700;
+
+    text-transform: uppercase;
+
+    letter-spacing: 0.08em;
+
+    color: #64748b;
+}
+
+.dependency-node-name {
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-size: 13px;
+    font-weight: 600;
+
+    color: #e2e8f0;
+}
+
+.dependency-relationship {
+    display: flex;
+    align-items: center;
+
+    gap: 8px;
+}
+
+.dependency-line {
+    flex: 1;
+
+    height: 1px;
+
+    background: rgba(148, 163, 184, 0.25);
+}
+
+.dependency-relationship-label {
+    flex-shrink: 0;
+
+    font-size: 10px;
+    font-weight: 700;
+
+    color: #38bdf8;
+}
+
+.dependency-arrow {
+    font-size: 16px;
+
+    color: #64748b;
+}
+
+.dependency-graph-empty {
+    padding: 50px 20px;
+
+    text-align: center;
+
+    font-size: 14px;
+
+    color: #64748b;
+}
+
+@media (max-width: 800px) {
+
+    .dependency-graph-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .dependency-relationship {
+        width: 100%;
+    }
+
+
+    .dependency-graph-canvas {
+    width: 100%;
+    height: 650px;
+
+    overflow: hidden;
+
+    border: 1px solid rgba(148, 163, 184, 0.10);
+    border-radius: 16px;
+
+    background: rgba(2, 6, 23, 0.35);
+}
+
+.dependency-graph-canvas .react-flow {
+    width: 100%;
+    height: 100%;
+}
+
+.dependency-graph-canvas
+.react-flow__node {
+    padding: 12px 16px;
+
+    border-radius: 10px;
+
+    border: 1px solid rgba(56, 189, 248, 0.25);
+
+    background: #0f172a;
+
+    color: #e2e8f0;
+
+    font-size: 12px;
+}
+
+.dependency-graph-canvas
+.react-flow__edge-text {
+    font-size: 9px;
+}
+}

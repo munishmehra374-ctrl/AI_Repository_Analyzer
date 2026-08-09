@@ -1,0 +1,9 @@
+.layout {
+    min-height: 100vh;
+    background: #060b16;
+    color: white;
+}
+
+.layout-content {
+    min-height: calc(100vh - 80px);
+}

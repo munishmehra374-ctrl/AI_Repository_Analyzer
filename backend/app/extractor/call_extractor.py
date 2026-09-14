@@ -37,6 +37,26 @@ class CallExtractor:
         return calls
 
     # ======================================================
+    # Source Text Extraction
+    # ======================================================
+
+    @staticmethod
+    def _get_source_text(
+        node: Node,
+        source_code: str,
+    ) -> str:
+
+        source_bytes = source_code.encode("utf-8")
+
+        return source_bytes[
+            node.start_byte:
+            node.end_byte
+        ].decode(
+            "utf-8",
+            errors="replace",
+        )
+
+    # ======================================================
     # Recursive Traversal
     # ======================================================
 
@@ -59,10 +79,10 @@ class CallExtractor:
 
             if function_node:
 
-                called_text = source_code[
-                    function_node.start_byte:
-                    function_node.end_byte
-                ]
+                called_text = self._get_source_text(
+                    function_node,
+                    source_code,
+                )
 
                 print(
                     "CALL DETECTED:",

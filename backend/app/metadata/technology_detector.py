@@ -40,37 +40,51 @@ class TechnologyDetector:
 
             detected["dependencies"].add(module)
 
-            technology = TECHNOLOGY_REGISTRY.get(module)
+            technology = TECHNOLOGY_REGISTRY.get(
+                         module
+             )
+
+            if technology is None:
+
+                root_module = module.split(".")[0]
+
+                technology = TECHNOLOGY_REGISTRY.get(
+                    root_module
+                )
 
             if technology is None:
                 continue
 
-            category = technology["category"]
+            tech_entries = (
+                technology
+                if isinstance(technology, list)
+                else [technology]
+            )
 
-            name = technology["name"]
+            for tech in tech_entries:
 
-            if category == "Web Framework":
+                category = tech.get("category")
 
-                detected["frameworks"].add(name)
+                name = tech.get("name")
 
-            elif category == "Database":
+                if category == "Web Framework":
 
-                detected["databases"].add(name)
+                    detected["frameworks"].add(name)
 
-            elif category == "Graph Database":
+                elif category in ("Database", "Graph Database"):
 
-                detected["databases"].add(name)
+                    detected["databases"].add(name)
 
-            elif category == "Vector Database":
+                elif category == "Vector Database":
 
-                detected["vector_databases"].add(name)
+                    detected["vector_databases"].add(name)
 
-            elif category == "LLM Framework":
+                elif category == "LLM Framework":
 
-                detected["llm_frameworks"].add(name)
+                    detected["llm_frameworks"].add(name)
 
-            elif category == "LLM Provider":
+                elif category == "LLM Provider":
 
-                detected["llm_providers"].add(name)
+                    detected["llm_providers"].add(name)
 
         return detected

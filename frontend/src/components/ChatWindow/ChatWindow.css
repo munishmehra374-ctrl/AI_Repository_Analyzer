@@ -1,49 +1,103 @@
-.chat-window{
+/* =====================================================
+   CHAT WINDOW
+===================================================== */
 
-    flex:1;
+.chat-window {
+    flex: 1;
 
-    min-height:450px;
+    width: 100%;
 
-    max-height:calc(100vh - 340px);
+    min-height: 0;
 
-    overflow-y:auto;
+    /*
+     * Let the parent (.chat-body) determine the height.
+     */
+    max-height: none;
 
-    display:flex;
+    /*
+     * Only this element scrolls.
+     */
+    overflow-y: auto;
+    overflow-x: hidden;
 
-    flex-direction:column;
+    display: flex;
+    flex-direction: column;
 
-    gap:24px;
+    /*
+     * Let ChatMessage control its own spacing.
+     */
+    gap: 0;
 
-    padding:35px;
+    /*
+     * Vertical spacing only.
+     * No horizontal padding so the scrollbar can
+     * reach the right edge.
+     */
+    padding: 30px 0;
 
-    border-radius:22px;
+    box-sizing: border-box;
 
-    background:rgba(255,255,255,.04);
+    /*
+     * Same background as the website.
+     */
+    background: transparent;
 
-    border:1px solid rgba(255,255,255,.08);
+    /*
+     * No rectangular outline.
+     */
+    border: none;
+    border-radius: 0;
 
-    backdrop-filter:blur(18px);
+    /*
+     * No glass effect.
+     */
+    backdrop-filter: none;
 
-    box-shadow:0 15px 40px rgba(0,0,0,.25);
-
+    /*
+     * No shadow.
+     */
+    box-shadow: none;
 }
 
-.chat-window::-webkit-scrollbar{
 
-    width:8px;
+/* =====================================================
+   SCROLLBAR
+===================================================== */
 
+.chat-window::-webkit-scrollbar {
+    width: 8px;
 }
 
-.chat-window::-webkit-scrollbar-thumb{
-
-    background:#2f4b7c;
-
-    border-radius:20px;
-
+.chat-window::-webkit-scrollbar-thumb {
+    background: #2f4b7c;
+    border-radius: 20px;
 }
 
-.chat-window::-webkit-scrollbar-track{
+.chat-window::-webkit-scrollbar-track {
+    background: transparent;
+}
 
-    background:transparent;
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 768px) {
+
+    .chat-window {
+        padding: 24px 0;
+
+        min-height: 0;
+
+        max-height: none;
+    }
+
+    .ready-message {
+    width: 100%;
+    text-align: center;
+    margin-top: 20px;
+    font-size: 24px;
+    font-weight: 500;
+}
 
 }

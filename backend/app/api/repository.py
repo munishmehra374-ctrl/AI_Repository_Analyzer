@@ -1,6 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+
 import json
 import uuid
+import hashlib
+import os
 
 from app.models.repository import RepositoryRequest
 
@@ -26,6 +29,8 @@ from app.core.redis import redis_client
 from app.retrieval.bm25_index import BM25Index
 
 from app.knowledge.graph_queries import GraphQueries
+
+from app.core.llm_factory import LLMFactory
 
 
 router = APIRouter(
@@ -56,9 +61,15 @@ def clone_repository(
     request: RepositoryRequest,
 ):
 
-    return clone_service.clone_repository(
-        request.url
-    )
+    try:
+        return clone_service.clone_repository(
+            request.url
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
 
 
 # =====================================================
@@ -119,29 +130,35 @@ def index_file(
     file_path: str,
 ):
 
-    # Generate ONE task ID.
-    # This exact ID is sent to Celery and returned
-    # to the frontend.
+    file_path = file_path.strip()
 
-    task_id = str(
-        uuid.uuid4()
-    )
+    repository_id = hashlib.sha256(
+        os.path.normcase(
+            os.path.abspath(file_path)
+        ).encode("utf-8")
+    ).hexdigest()[:16]
+
+    task_id = str(uuid.uuid4())
 
     task = index_repository_task.apply_async(
-        args=[file_path],
+        args=[
+            file_path,
+            repository_id,
+        ],
         task_id=task_id,
     )
 
     print("=" * 80)
     print("FASTAPI TASK ID:", task.id)
     print("GENERATED TASK ID:", task_id)
+    print("REPOSITORY ID:", repository_id)
     print("=" * 80)
 
     return {
         "task_id": task_id,
+        "repository_id": repository_id,
         "status": "queued",
     }
-
 
 # =====================================================
 # Task Status
@@ -208,6 +225,7 @@ def get_progress(
 
     print("=" * 80 + "\n")
 
+
     # -------------------------------------------------
     # Redis progress exists
     # -------------------------------------------------
@@ -215,6 +233,7 @@ def get_progress(
     if progress:
 
         return progress
+
 
     # -------------------------------------------------
     # Redis progress does not exist
@@ -231,6 +250,7 @@ def get_progress(
         task.status,
     )
 
+
     if task.status == "PENDING":
 
         return {
@@ -242,6 +262,7 @@ def get_progress(
             "total_files": "0",
         }
 
+
     if task.status == "SUCCESS":
 
         return {
@@ -250,6 +271,7 @@ def get_progress(
             "stage": "Repository Indexed",
             "progress": "100",
         }
+
 
     if task.status == "FAILURE":
 
@@ -262,6 +284,7 @@ def get_progress(
                 task.result
             ),
         }
+
 
     return {
         "task_id": task_id,
@@ -285,6 +308,11 @@ def get_repository_profile(
     )
 
     if profile is None:
+        profile = redis_client.get(
+            f"profile:repository:{task_id}"
+        )
+
+    if profile is None:
 
         return {
             "error": "Repository profile not found."
@@ -294,14 +322,19 @@ def get_repository_profile(
         profile
     )
 
+
 # =====================================================
 # Knowledge Graph Statistics
 # =====================================================
 
 @router.get("/graph/statistics")
-def get_graph_statistics():
+def get_graph_statistics(
+    repository_id: str | None = None,
+):
 
-    return graph_queries.get_graph_statistics()
+    return graph_queries.get_graph_statistics(
+        repository_id=repository_id
+    )
 
 
 # =====================================================
@@ -309,9 +342,13 @@ def get_graph_statistics():
 # =====================================================
 
 @router.get("/graph/dependencies")
-def get_graph_dependencies():
+def get_graph_dependencies(
+    repository_id: str | None = None,
+):
 
-    return graph_queries.get_dependency_graph()
+    return graph_queries.get_dependency_graph(
+        repository_id=repository_id
+    )
 
 
 # =====================================================
@@ -329,15 +366,20 @@ def search(
 
     return documents
 
-
 # =====================================================
 # Chat
 # =====================================================
-
 @router.post("/chat")
 def chat(
     question: str,
+    generate_title: bool = True,
+    task_id: str | None = None,
 ):
+
+    print("\n========== CHAT REQUEST ==========")
+    print("generate_title RECEIVED:", generate_title)
+    print("question:", question)
+    print("==================================\n")
 
     print("=" * 60)
     print("FASTAPI Retrieval Service:")
@@ -346,10 +388,54 @@ def chat(
     )
     print("=" * 60)
 
-    # Initialize retrieval pipeline
-    # if it hasn't been created.
+    # -------------------------------------------------
+    # Get repository profile
+    # -------------------------------------------------
 
-    if dependencies.retrieval_service is None:
+    repository_profile = {}
+
+    repository_id = None
+
+    if task_id:
+
+        profile = redis_client.get(
+            f"profile:{task_id}"
+        )
+
+        if profile:
+
+            repository_profile = json.loads(
+                profile
+            )
+
+            repository_id = (
+                repository_profile.get(
+                    "repository_id"
+                )
+            )
+
+    if not repository_id:
+
+        raise ValueError(
+            "repository_id could not be determined."
+        )
+
+    print(
+        "Repository ID:",
+        repository_id,
+    )
+
+    # -------------------------------------------------
+    # Initialize repository-specific retrieval
+    # -------------------------------------------------
+
+    retrieval_service = (
+        dependencies.get_retrieval_service(
+            repository_id
+        )
+    )
+
+    if retrieval_service is None:
 
         print(
             "Initializing Retrieval Pipeline..."
@@ -360,37 +446,121 @@ def chat(
         bm25_index = BM25Index()
 
         bm25_index.load(
-            "bm25_db"
+            "bm25_db",
+            repository_id,
         )
 
         dependencies.initialize(
             vector_store=vector_store,
             bm25_index=bm25_index,
+            repository_id=repository_id,
         )
 
         print(
             "Retrieval Pipeline Initialized!"
         )
 
-        print(
-            dependencies.retrieval_service
+    # -------------------------------------------------
+    # Get repository-specific tools
+    # -------------------------------------------------
+
+    retrieval_tool = (
+        dependencies.get_retrieval_tool(
+            repository_id
+        )
+    )
+
+    graph_tool = (
+        dependencies.get_graph_tool(
+            repository_id
+        )
+    )
+
+    if retrieval_tool is None:
+
+        raise ValueError(
+            f"No retrieval tool found for repository: "
+            f"{repository_id}"
         )
 
-    workflow = create_workflow()
+    if graph_tool is None:
+
+        raise ValueError(
+            f"No graph tool found for repository: "
+            f"{repository_id}"
+        )
+
+    # -------------------------------------------------
+    # Create repository-specific workflow
+    # -------------------------------------------------
+
+    workflow = create_workflow(
+        repository_id
+    )
+
+    print(
+        "\n" + "=" * 80
+    )
+
+    print(
+        ">>> NEW WORKFLOW CODE IS RUNNING <<<"
+    )
+
+    print(
+        "Repository ID:",
+        repository_id,
+    )
+
+    print(
+        "Retrieval Tool:",
+        retrieval_tool,
+    )
+
+    print(
+        "Graph Tool:",
+        graph_tool,
+    )
+
+    print(
+        "Workflow:",
+        workflow,
+    )
+
+    print(
+        "=" * 80
+    )
+
+    # -------------------------------------------------
+    # Generate actual repository answer
+    # -------------------------------------------------
 
     result = workflow.invoke(
         {
             "question": question,
 
+            "generate_title": generate_title,
+
+             "title": None,
+             
             "repository_uploaded": True,
 
             "repository_indexed": True,
 
-            "repository_name":
-                "AI-Repository-Analyzer",
+            "repository_id": repository_id,
 
-            "primary_language":
-                "Python",
+            "repository_name": (
+                repository_profile.get(
+                    "repository_name",
+                    ""
+                )
+            ),
+
+            "primary_language": (
+                repository_profile.get(
+                    "primary_language",
+                    ""
+                )
+            ),
 
             "question_type": None,
 
@@ -398,20 +568,33 @@ def chat(
 
             "reason": None,
 
+            "deep_analysis": False,
+
             "retrieval_context": None,
 
             "graph_context": None,
 
             "repository_context": None,
 
-            "needs_retrieval": True,
+            "retrieval_candidates": [],
+
+            "graph_candidates": [],
+
+            "repository_candidates": [],
 
             "context": "",
 
+            "analysis": None,
+
+            "root_cause": None,
+
+            "review": None,
+
             "answer": "",
         }
-    ) 
+    )
 
     return {
-        "answer": result["answer"]
+        "answer": result["answer"],
+        "title": result.get("title"),
     }

@@ -1,8 +1,13 @@
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import (
+    HumanMessage,
+    SystemMessage,
+)
 
+from app.core.config import get_settings
 from app.graph.prompts import ANSWER_PROMPT
 from app.graph.state import GraphState
 from app.services.llm_service import LLMService
+
 
 class AnswerNode:
 
@@ -11,15 +16,57 @@ class AnswerNode:
         llm_service: LLMService,
     ):
         self.llm = llm_service
+        self.settings = get_settings()
+
+    # ==========================================================
+    # Build messages for final answer
+    # ==========================================================
+
+    def build_messages(
+        self,
+        question: str,
+        question_type: str,
+        context: str,
+    ):
+
+        prompt = ANSWER_PROMPT.format(
+            context=context,
+            question_type=question_type,
+        )
+
+        return [
+            SystemMessage(
+                content=prompt
+            ),
+            HumanMessage(
+                content=question
+            ),
+        ]
+
+    # ==========================================================
+    # Build messages WITHOUT repository context
+    # ==========================================================
+
+    def build_messages_without_context(
+        self,
+        question: str,
+        question_type: str,
+    ):
+
+        return self.build_messages(
+            question=question,
+            question_type=question_type,
+            context="",
+        )
+
+    # ==========================================================
+    # Node
+    # ==========================================================
 
     def __call__(
         self,
         state: GraphState,
-    ):
-
-        # =====================================================
-        # Get Question
-        # =====================================================
+    ) -> GraphState:
 
         question = state.get(
             "question",
@@ -31,148 +78,248 @@ class AnswerNode:
             "general",
         )
 
-        # =====================================================
-        # Get Tool Contexts
-        # =====================================================
-
-        retrieval_context = (
-            state.get("retrieval_context")
-            or ""
+        deep_analysis = state.get(
+            "deep_analysis",
+            False,
         )
 
-        graph_context = (
-            state.get("graph_context")
-            or ""
-        )
+        # ======================================================
+        # NORMAL QUESTIONS
+        # ======================================================
 
-        repository_context = (
-            state.get("repository_context")
-            or ""
-        )
+        if not deep_analysis:
 
-        # =====================================================
-        # Build Final Context
-        # =====================================================
-
-        retrieval_context = (
-            state.get("retrieval_context")
-            or ""
-        )
-
-        graph_context = (
-            state.get("graph_context")
-            or ""
-        )
-
-        repository_context = (
-            state.get("repository_context")
-            or ""
-        )
-
-        context_parts = []
-
-        if retrieval_context:
-            context_parts.append(
-                "===== RETRIEVAL CONTEXT =====\n"
-                + retrieval_context
+            context = (
+                state.get("context")
+                or ""
             )
 
-        if graph_context:
-            context_parts.append(
-                "===== GRAPH CONTEXT =====\n"
-                + graph_context
+        # ======================================================
+        # MULTI-AGENT QUESTIONS
+        # ======================================================
+
+        else:
+
+            review = (
+                state.get("review")
+                or ""
             )
 
-        if repository_context:
-            context_parts.append(
-                "===== REPOSITORY CONTEXT =====\n"
-                + repository_context
+            context = (
+                "===== REVIEWED MULTI-AGENT ANALYSIS =====\n\n"
+                + review
             )
 
-        context = "\n\n".join(context_parts)
+        # ======================================================
+        # Deterministic Security Guard
+        # ======================================================
 
-        # Store aggregated context
+        is_security_question = (
+            "security" in question_type.lower()
+        )
 
-        state["context"] = context
+        if (
+            deep_analysis
+            and is_security_question
+            and self._has_no_supported_finding(
+                context
+            )
+        ):
 
-        # =====================================================
+            answer = (
+                "No confirmed security or architecture issue "
+                "can be established from the provided repository context."
+            )
+
+            print(
+                "\n========== ANSWER NODE =========="
+            )
+
+            print(
+                "Question:"
+            )
+
+            print(
+                question
+            )
+
+            print(
+                "\nQuestion Type:"
+            )
+
+            print(
+                question_type
+            )
+
+            print(
+                "\nDeep Analysis:"
+            )
+
+            print(
+                deep_analysis
+            )
+
+            print(
+                "\nDeterministic Security Guard:"
+            )
+
+            print(
+                "No supported security finding detected."
+            )
+
+            print(
+                "\nFINAL ANSWER:"
+            )
+
+            print(
+                answer
+            )
+
+            print(
+                "==================================\n"
+            )
+
+            state["answer"] = answer
+
+            return state
+
+        # ======================================================
         # Debug
-        # =====================================================
-
-        print("\n========== ANSWER NODE ==========")
-
-        print("Question:")
-        print(question)
-
-        print("\nQuestion Type:")
-        print(question_type)
+        # ======================================================
 
         print(
-            "\nRetrieval Context Length:",
-            len(retrieval_context),
+            "\n========== ANSWER NODE =========="
         )
 
         print(
-            "Graph Context Length:",
-            len(graph_context),
+            "Question:"
         )
 
         print(
-            "Repository Context Length:",
-            len(repository_context),
+            question
         )
 
         print(
-            "FINAL CONTEXT LENGTH:",
-            len(context),
+            "\nQuestion Type:"
+        )
+
+        print(
+            question_type
+        )
+
+        print(
+            "\nDeep Analysis:"
+        )
+
+        print(
+            deep_analysis
+        )
+
+        print(
+            "\nFinal Context Length:"
+        )
+
+        print(
+            len(context)
+        )
+
+        print(
+            "\nConfigured Output Budget:"
+        )
+
+        print(
+            self.settings.ANSWER_MAX_OUTPUT_TOKENS
         )
 
         print(
             "\n========== FINAL CONTEXT PREVIEW =========="
         )
-        print(context[:10000])
+
+        print(
+            context[:10000]
+        )
+
         print(
             "============================================\n"
         )
 
-        # =====================================================
-        # Build Answer Prompt
-        # =====================================================
+        # ======================================================
+        # Build final messages
+        # ======================================================
 
-        prompt = ANSWER_PROMPT.format(
-            context=context,
+        messages = self.build_messages(
+            question=question,
             question_type=question_type,
+            context=context,
         )
 
-        # =====================================================
-        # LLM Messages
-        # =====================================================
-
-        messages = [
-            SystemMessage(
-                content=prompt
-            ),
-            HumanMessage(
-                content=question
-            ),
-        ]
-
-        # =====================================================
+        # ======================================================
         # Generate Answer
-        # =====================================================
+        # ======================================================
 
         answer = self.llm.invoke(
-            messages
+            messages,
+            max_output_tokens=(
+                self.settings.ANSWER_MAX_OUTPUT_TOKENS
+            ),
         )
 
-        # =====================================================
+        # ======================================================
         # Store Answer
-        # =====================================================
+        # ======================================================
 
-        print("\n========== FINAL ANSWER ==========")
-        print(answer)
-        print("==================================\n")
+        print(
+            "\n========== FINAL ANSWER =========="
+        )
+
+        print(
+            answer
+        )
+
+        print(
+            "==================================\n"
+        )
 
         state["answer"] = answer
 
         return state
+
+    # ==========================================================
+    # Security Finding Check
+    # ==========================================================
+
+    @staticmethod
+    def _has_no_supported_finding(
+        context: str,
+    ) -> bool:
+
+        normalized = (
+            context
+            .strip()
+            .lower()
+        )
+
+        if not normalized:
+            return True
+
+        security_header = (
+            "security & architecture findings:"
+        )
+
+        no_finding_marker = (
+            "- no supported finding identified."
+        )
+
+        overall_conclusion = (
+            "no confirmed security or architecture issue "
+            "can be established from the provided repository context."
+        )
+
+        if (
+            security_header in normalized
+            and no_finding_marker in normalized
+            and overall_conclusion in normalized
+        ):
+            return True
+
+        return False

@@ -1,14 +1,366 @@
-.chat-page{
+/* =====================================================
+CHAT LAYOUT
+===================================================== */
 
-    display:flex;
+.chat-layout {
+    display: flex;
 
-    flex-direction:column;
+    width: 100%;
+    height: 100%;
 
-    height:100%;
+    min-width: 0;
+    min-height: 0;
 
-    padding:35px;
+    overflow: hidden;
 
-    gap:24px;
+    background: #070b14;
+}
 
-    background:#070b14;
+
+/* =====================================================
+CHAT PAGE
+===================================================== */
+
+.chat-page {
+    position: relative;
+
+    flex: 1;
+
+    width: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    height: 100%;
+
+    display: flex;
+
+    flex-direction: column;
+
+    box-sizing: border-box;
+
+    padding: 35px;
+
+    gap: 20px;
+
+    background: #070b14;
+
+    overflow: hidden;
+}
+
+
+/* =====================================================
+CHAT BODY
+===================================================== */
+
+.chat-body {
+    flex: 1;
+
+    width: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    display: flex;
+
+    flex-direction: column;
+
+    overflow: hidden;
+
+    background: transparent;
+}
+
+
+/* =====================================================
+CHAT WINDOW
+===================================================== */
+
+.chat-body .chat-window {
+    flex: 1;
+
+    width: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    overflow-y: auto;
+
+    overflow-x: hidden;
+
+    background: transparent;
+}
+
+
+/* =====================================================
+OLD READY MESSAGE
+===================================================== */
+
+.chat-body .ready-message {
+    width: 100%;
+
+    display: flex;
+
+    justify-content: center;
+
+    text-align: center;
+
+    margin-top: 5px;
+
+    font-size: 24px;
+
+    font-weight: 500;
+
+    color: #f8fafc;
+}
+
+
+/* =====================================================
+EMPTY CHAT
+===================================================== */
+
+.empty-chat {
+    flex: 1;
+
+    width: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    box-sizing: border-box;
+}
+
+
+/* =====================================================
+EMPTY CHAT CONTENT
+===================================================== */
+
+.empty-chat-content {
+    width: min(900px, 100%);
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 28px;
+
+    transform: translateY(-20px);
+}
+
+
+/* =====================================================
+EMPTY CHAT READY MESSAGE
+===================================================== */
+
+.empty-chat-content .ready-message {
+    width: 100%;
+
+    margin: 0;
+
+    text-align: center;
+
+    color: #f8fafc;
+
+    font-size: 24px;
+
+    font-weight: 500;
+
+    line-height: 1.4;
+}
+
+
+/* =====================================================
+EMPTY CHAT INPUT
+===================================================== */
+
+.empty-chat-content .chat-input-container {
+    width: min(900px, 100%);
+
+    margin: 0 auto;
+}
+
+
+/* =====================================================
+CHAT COMPOSER
+===================================================== */
+
+.chat-composer {
+    flex: 0 0 auto;
+
+    width: 100%;
+
+    min-width: 0;
+
+    min-height: 100px;
+
+    box-sizing: border-box;
+
+    display: flex;
+
+    align-items: flex-start;
+
+    justify-content: center;
+
+    padding-top: 8px;
+
+    background: transparent;
+
+    border: none;
+
+    box-shadow: none;
+}
+
+
+/* =====================================================
+CHAT INPUT WIDTH
+===================================================== */
+
+.chat-composer .chat-input-container {
+    width: min(900px, 100%);
+
+    margin: 0 auto;
+}
+
+
+/* =====================================================
+SIDEBAR TOGGLE
+===================================================== */
+
+.sidebar-toggle {
+    position: absolute;
+
+    top: 16px;
+
+    left: 12px;
+
+    z-index: 20;
+
+    width: 34px;
+
+    height: 34px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 0;
+
+    border: 1px solid rgba(255, 255, 255, 0.1);
+
+    border-radius: 10px;
+
+    background: rgba(17, 24, 39, 0.85);
+
+    color: #cbd5e1;
+
+    font-size: 25px;
+
+    line-height: 1;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease,
+        transform 0.2s ease;
+}
+
+
+/* =====================================================
+SIDEBAR TOGGLE HOVER
+===================================================== */
+
+.sidebar-toggle:hover {
+    background: #172033;
+
+    border-color: rgba(96, 165, 250, 0.5);
+
+    color: #ffffff;
+
+    transform: scale(1.05);
+}
+
+
+/* =====================================================
+SIDEBAR TOGGLE ACTIVE
+===================================================== */
+
+.sidebar-toggle:active {
+    transform: scale(0.95);
+}
+
+
+/* =====================================================
+RESPONSIVE
+===================================================== */
+
+@media (max-width: 768px) {
+
+    .chat-page {
+        padding: 20px;
+
+        gap: 16px;
+    }
+
+
+    .chat-composer {
+        min-height: 66px;
+
+        padding-top: 6px;
+    }
+
+
+    .chat-composer .chat-input-container {
+        width: 100%;
+    }
+
+
+    .chat-body .ready-message {
+        font-size: 21px;
+    }
+
+
+    .empty-chat-content {
+        width: 100%;
+
+        gap: 20px;
+
+        transform: translateY(-20px);
+    }
+
+
+    .empty-chat-content .ready-message {
+        font-size: 21px;
+    }
+
+
+    .empty-chat-content .chat-input-container {
+        width: 100%;
+    }
+
+
+    .sidebar-toggle {
+        top: 10px;
+
+        left: 10px;
+
+        width: 32px;
+
+        height: 32px;
+
+        font-size: 22px;
+    }
+
 }

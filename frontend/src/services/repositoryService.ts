@@ -1,5 +1,12 @@
 import api from "../api/api";
 
+export const cloneRepository = async (repoUrl: string) => {
+    const response = await api.post("/repositories/clone", {
+        url: repoUrl,
+    });
+    return response.data;
+};
+
 export const indexRepository = async (
     repositoryPath: string
 ) => {
@@ -41,18 +48,32 @@ export const getRepositoryProfile = async (
     return response.data;
 };
 
-export const getGraphStatistics = async () => {
+export const getGraphStatistics = async (
+    repositoryId?: string
+) => {
     const response = await api.get(
-        "/repositories/graph/statistics"
+        "/repositories/graph/statistics",
+        {
+            params: repositoryId
+                ? { repository_id: repositoryId }
+                : {},
+        }
     );
 
     return response.data;
 };
 
-export const getDependencyGraph = async () => {
+export const getDependencyGraph = async (
+    repositoryId?: string
+) => {
 
     const response = await api.get(
-        "/repositories/graph/dependencies"
+        "/repositories/graph/dependencies",
+        {
+            params: repositoryId
+                ? { repository_id: repositoryId }
+                : {},
+        }
     );
 
     return response.data;

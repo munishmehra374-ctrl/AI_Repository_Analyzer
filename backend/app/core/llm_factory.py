@@ -34,7 +34,7 @@ class LLMFactory:
                 model=settings.GROQ_MODEL,
                 api_key=settings.GROQ_API_KEY,
                 temperature=settings.TEMPERATURE,
-                max_tokens=settings.MAX_TOKENS,
+                max_tokens=settings.OUTPUT_TOKEN_RESERVE,
             )
 
         raise ValueError(

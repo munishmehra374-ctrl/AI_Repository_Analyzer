@@ -17,11 +17,17 @@ import RepositoryStructure from "./components/RepositoryStructure/RepositoryStru
 import FolderStructure from "./components/FolderStructure/FolderStructure";
 import KnowledgeGraphSummary from "./components/KnowledgeGraphSummary/KnowledgeGraphSummary";
 import DependencyGraph from "./components/DependencyGraph/DependencyGraph";
+import { useRepository } from "../../context/RepositoryContext";
 
 import "./Analysis.css";
 
 
 const Analysis: React.FC = () => {
+
+    const {
+        taskId: contextTaskId,
+        repositoryId: contextRepoId,
+    } = useRepository();
 
     const [profile, setProfile] =
         useState<any>(null);
@@ -46,6 +52,14 @@ const Analysis: React.FC = () => {
             try {
 
                 const taskId =
+                    contextTaskId ||
+                    localStorage.getItem(
+                        "repository_task_id"
+                    ) ||
+                    contextRepoId ||
+                    localStorage.getItem(
+                        "repository_id"
+                    ) ||
                     localStorage.getItem(
                         "task_id"
                     );
@@ -79,12 +93,17 @@ const Analysis: React.FC = () => {
                 }
 
 
+                const repoId =
+                    profileData?.repository_id ||
+                    localStorage.getItem("repository_id") ||
+                    undefined;
+
                 // =========================================
                 // Knowledge Graph Statistics
                 // =========================================
 
                 const graphData =
-                    await getGraphStatistics();
+                    await getGraphStatistics(repoId);
 
 
                 // =========================================
@@ -92,7 +111,7 @@ const Analysis: React.FC = () => {
                 // =========================================
 
                 const dependencyData =
-                    await getDependencyGraph();
+                    await getDependencyGraph(repoId);
 
 
                 // =========================================
@@ -132,7 +151,7 @@ const Analysis: React.FC = () => {
 
         loadAnalysis();
 
-    }, []);
+    }, [contextTaskId, contextRepoId]);
 
 
     // =========================================

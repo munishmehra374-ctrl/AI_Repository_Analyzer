@@ -6,6 +6,7 @@ from app.core.config import settings
 
 import os
 
+
 class GraphQueries:
     """
     Repository Knowledge Graph Queries.
@@ -29,7 +30,34 @@ class GraphQueries:
     # Repository
     # =====================================================
 
-    def get_repository(self):
+    def get_repository(
+        self,
+        repository_id: str | None = None,
+    ):
+
+        if repository_id:
+
+            query = """
+            MATCH (r:Repository)
+            WHERE r.repository_id = $repository_id
+            RETURN r
+            LIMIT 1
+            """
+
+            with self.driver.session() as session:
+
+                record = session.run(
+                    query,
+                    repository_id=repository_id,
+                ).single()
+
+                return (
+                    record["r"]
+                    if record
+                    else None
+                )
+
+        # Existing behavior preserved
 
         query = """
         MATCH (r:Repository)
@@ -39,32 +67,71 @@ class GraphQueries:
 
         with self.driver.session() as session:
 
-            record = session.run(query).single()
+            record = session.run(
+                query
+            ).single()
 
-            return record["r"] if record else None
+            return (
+                record["r"]
+                if record
+                else None
+            )
 
     # =====================================================
     # Repository Structure
     # =====================================================
 
-    def get_repository_structure(self):
+    def get_repository_structure(
+        self,
+        repository_id: str | None = None,
+    ):
 
-        query = """
-        MATCH (r:Repository)-[:HAS_FOLDER]->(folder)
-        OPTIONAL MATCH (folder)-[:HAS_FILE]->(file)
+        if repository_id:
 
-        RETURN
-            folder.name AS folder,
-            collect(file.name) AS files
+            query = """
+            MATCH (r:Repository)
+            WHERE r.repository_id = $repository_id
 
-        ORDER BY folder
-        """
+            MATCH (r)-[:HAS_FOLDER]->(folder)
+            OPTIONAL MATCH (folder)-[:HAS_FILE]->(file)
+
+            RETURN
+                folder.name AS folder,
+                collect(file.name) AS files
+
+            ORDER BY folder
+            """
+
+            params = {
+                "repository_id": repository_id
+            }
+
+        else:
+
+            query = """
+            MATCH (r:Repository)-[:HAS_FOLDER]->(folder)
+            OPTIONAL MATCH (folder)-[:HAS_FILE]->(file)
+
+            RETURN
+                folder.name AS folder,
+                collect(file.name) AS files
+
+            ORDER BY folder
+            """
+
+            params = {}
 
         with self.driver.session() as session:
 
-            result = session.run(query)
+            result = session.run(
+                query,
+                **params,
+            )
 
-            return [dict(record) for record in result]
+            return [
+                dict(record)
+                for record in result
+            ]
 
     # =====================================================
     # File
@@ -73,21 +140,66 @@ class GraphQueries:
     def get_file(
         self,
         file_path: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (f:File {path:$path})
-        RETURN f
-        """
+        suffix_slash = "/" + file_path
+        suffix_backslash = "\\" + file_path
+
+        if repository_id:
+
+            query = """
+            MATCH (f:File)
+            WHERE (
+                f.path = $path
+                OR f.name = $path
+                OR f.path ENDS WITH $suffix_slash
+                OR f.path ENDS WITH $suffix_backslash
+            )
+            AND f.repository_id = $repository_id
+            RETURN f
+            LIMIT 1
+            """
+
+            params = {
+                "path": file_path,
+                "suffix_slash": suffix_slash,
+                "suffix_backslash": suffix_backslash,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (f:File)
+            WHERE (
+                f.path = $path
+                OR f.name = $path
+                OR f.path ENDS WITH $suffix_slash
+                OR f.path ENDS WITH $suffix_backslash
+            )
+            RETURN f
+            LIMIT 1
+            """
+
+            params = {
+                "path": file_path,
+                "suffix_slash": suffix_slash,
+                "suffix_backslash": suffix_backslash,
+            }
 
         with self.driver.session() as session:
 
             record = session.run(
                 query,
-                path=file_path,
+                **params,
             ).single()
 
-            return record["f"] if record else None
+            return (
+                record["f"]
+                if record
+                else None
+            )
 
     # =====================================================
     # File By Name
@@ -96,43 +208,112 @@ class GraphQueries:
     def get_file_by_name(
         self,
         file_name: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (f:File {name:$name})
-        RETURN f
-        LIMIT 1
-        """
+        if repository_id:
+
+            query = """
+            MATCH (f:File {
+                name:$name,
+                repository_id:$repository_id
+            })
+            RETURN f
+            LIMIT 1
+            """
+
+            params = {
+                "name": file_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (f:File {name:$name})
+            RETURN f
+            LIMIT 1
+            """
+
+            params = {
+                "name": file_name
+            }
 
         with self.driver.session() as session:
 
             record = session.run(
                 query,
-                name=file_name,
+                **params,
             ).single()
 
-            return record["f"] if record else None
+            return (
+                record["f"]
+                if record
+                else None
+            )
 
     # =====================================================
     # File Classes
     # =====================================================
-    
+
     def get_file_classes(
         self,
         file_path: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (f:File {path:$path})-[:HAS_CLASS]->(c)
+        suffix_slash = "/" + file_path
+        suffix_backslash = "\\" + file_path
 
-        RETURN c.name AS class
-        """
+        if repository_id:
+
+            query = """
+            MATCH (f:File)
+            WHERE (
+                f.path = $path
+                OR f.name = $path
+                OR f.path ENDS WITH $suffix_slash
+                OR f.path ENDS WITH $suffix_backslash
+            )
+            AND f.repository_id = $repository_id
+            MATCH (f)-[:HAS_CLASS]->(c)
+
+            RETURN c.name AS class
+            """
+
+            params = {
+                "path": file_path,
+                "suffix_slash": suffix_slash,
+                "suffix_backslash": suffix_backslash,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (f:File)
+            WHERE (
+                f.path = $path
+                OR f.name = $path
+                OR f.path ENDS WITH $suffix_slash
+                OR f.path ENDS WITH $suffix_backslash
+            )
+            MATCH (f)-[:HAS_CLASS]->(c)
+
+            RETURN c.name AS class
+            """
+
+            params = {
+                "path": file_path,
+                "suffix_slash": suffix_slash,
+                "suffix_backslash": suffix_backslash,
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                path=file_path,
+                **params,
             )
 
             return [
@@ -147,25 +328,127 @@ class GraphQueries:
     def get_file_functions(
         self,
         file_path: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (f:File {path:$path})-[:HAS_FUNCTION]->(fn)
+        suffix_slash = "/" + file_path
+        suffix_backslash = "\\" + file_path
 
-        RETURN fn.name AS function
-        """
+        if repository_id:
+
+            query = """
+            MATCH (f:File)
+            WHERE (
+                f.path = $path
+                OR f.name = $path
+                OR f.path ENDS WITH $suffix_slash
+                OR f.path ENDS WITH $suffix_backslash
+            )
+            AND f.repository_id = $repository_id
+            MATCH (f)-[:HAS_FUNCTION]->(fn)
+
+            RETURN fn.name AS function
+            """
+
+            params = {
+                "path": file_path,
+                "suffix_slash": suffix_slash,
+                "suffix_backslash": suffix_backslash,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (f:File)
+            WHERE (
+                f.path = $path
+                OR f.name = $path
+                OR f.path ENDS WITH $suffix_slash
+                OR f.path ENDS WITH $suffix_backslash
+            )
+            MATCH (f)-[:HAS_FUNCTION]->(fn)
+
+            RETURN fn.name AS function
+            """
+
+            params = {
+                "path": file_path,
+                "suffix_slash": suffix_slash,
+                "suffix_backslash": suffix_backslash,
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                path=file_path,
+                **params,
             )
 
             return [
                 record["function"]
                 for record in result
             ]
+
+
+    # =====================================================
+    # Function
+    # =====================================================
+
+    def get_function(
+        self,
+        function_name: str,
+        repository_id: str | None = None,
+    ):
+
+        if repository_id:
+
+            query = """
+            MATCH (f:Function)
+            WHERE
+                (
+                    f.name = $name
+                    OR f.qualified_name = $name
+                )
+                AND f.repository_id = $repository_id
+
+            RETURN f
+            LIMIT 1
+            """
+
+            params = {
+                "name": function_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (f:Function)
+            WHERE
+                f.name = $name
+                OR f.qualified_name = $name
+
+            RETURN f
+            LIMIT 1
+            """
+
+            params = {
+                "name": function_name,
+            }
+
+        with self.driver.session() as session:
+
+            record = session.run(
+                query,
+                **params,
+            ).single()
+
+            return (
+                record["f"]
+                if record
+                else None
+            )
 
     # =====================================================
     # Class
@@ -174,22 +457,47 @@ class GraphQueries:
     def get_class(
         self,
         class_name: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (c:Class {name:$name})
+        if repository_id:
 
-        RETURN c
-        """
+            query = """
+            MATCH (c:Class {name:$name})
+            WHERE c.repository_id = $repository_id
+            RETURN c
+            LIMIT 1
+            """
+
+            params = {
+                "name": class_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (c:Class {name:$name})
+            RETURN c
+            LIMIT 1
+            """
+
+            params = {
+                "name": class_name
+            }
 
         with self.driver.session() as session:
 
             record = session.run(
                 query,
-                name=class_name,
+                **params,
             ).single()
 
-            return record["c"] if record else None
+            return (
+                record["c"]
+                if record
+                else None
+            )
 
     # =====================================================
     # Class Methods
@@ -198,25 +506,51 @@ class GraphQueries:
     def get_class_methods(
         self,
         class_name: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (c:Class {name:$name})-[:HAS_METHOD]->(f)
+        if repository_id:
 
-        RETURN f.name AS method
-        """
+            query = """
+            MATCH (
+                c:Class {
+                    name:$name,
+                    repository_id:$repository_id
+                }
+            )-[:HAS_METHOD]->(f)
+
+            RETURN f.name AS method
+            """
+
+            params = {
+                "name": class_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (c:Class {name:$name})-[:HAS_METHOD]->(f)
+
+            RETURN f.name AS method
+            """
+
+            params = {
+                "name": class_name
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                name=class_name,
+                **params,
             )
 
             return [
                 record["method"]
                 for record in result
             ]
+
 
     # =====================================================
     # Parent Classes
@@ -225,19 +559,44 @@ class GraphQueries:
     def get_parent_classes(
         self,
         class_name: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (c:Class {name:$name})-[:INHERITS]->(parent)
+        if repository_id:
 
-        RETURN parent.name AS parent
-        """
+            query = """
+            MATCH (c:Class)
+            WHERE (c.name = $name OR c.qualified_name = $name)
+            AND c.repository_id = $repository_id
+            MATCH (c)-[:INHERITS]->(parent)
+
+            RETURN coalesce(parent.name, parent.qualified_name) AS parent
+            """
+
+            params = {
+                "name": class_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (c:Class)
+            WHERE c.name = $name OR c.qualified_name = $name
+            MATCH (c)-[:INHERITS]->(parent)
+
+            RETURN coalesce(parent.name, parent.qualified_name) AS parent
+            """
+
+            params = {
+                "name": class_name
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                name=class_name,
+                **params,
             )
 
             return [
@@ -252,19 +611,44 @@ class GraphQueries:
     def get_child_classes(
         self,
         class_name: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (child)-[:INHERITS]->(c:Class {name:$name})
+        if repository_id:
 
-        RETURN child.name AS child
-        """
+            query = """
+            MATCH (c:Class)
+            WHERE (c.name = $name OR c.qualified_name = $name)
+            AND c.repository_id = $repository_id
+            MATCH (child)-[:INHERITS]->(c)
+
+            RETURN coalesce(child.name, child.qualified_name) AS child
+            """
+
+            params = {
+                "name": class_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (c:Class)
+            WHERE c.name = $name OR c.qualified_name = $name
+            MATCH (child)-[:INHERITS]->(c)
+
+            RETURN coalesce(child.name, child.qualified_name) AS child
+            """
+
+            params = {
+                "name": class_name
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                name=class_name,
+                **params,
             )
 
             return [
@@ -273,54 +657,58 @@ class GraphQueries:
             ]
 
     # =====================================================
-    # Function
-    # =====================================================
-
-    def get_function(
-        self,
-        qualified_name: str,
-    ):
-
-        query = """
-        MATCH (f:Function)
-        WHERE f.name = $name
-           OR f.qualified_name = $name
-        RETURN f
-        LIMIT 1
-        """
-
-        with self.driver.session() as session:
-
-            record = session.run(
-                query,
-                name=qualified_name,
-            ).single()
-
-            return record["f"] if record else None
-
-    # =====================================================
     # Function Calls
     # =====================================================
 
     def get_function_calls(
         self,
         qualified_name: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (f:Function)
-        WHERE f.name = $name
-           OR f.qualified_name = $name
-        MATCH (f)-[:CALLS]->(called)
+        if repository_id:
 
-        RETURN called.name AS function
-        """
+            query = """
+            MATCH (f:Function)
+            WHERE
+                (
+                    f.name = $name
+                    OR f.qualified_name = $name
+                )
+                AND f.repository_id = $repository_id
+
+            MATCH (f)-[:CALLS]->(called)
+
+            RETURN coalesce(called.name, called.qualified_name) AS function
+            """
+
+            params = {
+                "name": qualified_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (f:Function)
+            WHERE
+                f.name = $name
+                OR f.qualified_name = $name
+
+            MATCH (f)-[:CALLS]->(called)
+
+            RETURN coalesce(called.name, called.qualified_name) AS function
+            """
+
+            params = {
+                "name": qualified_name
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                name=qualified_name,
+                **params,
             )
 
             return [
@@ -335,22 +723,52 @@ class GraphQueries:
     def get_called_by(
         self,
         qualified_name: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (f:Function)
-        WHERE f.name = $name
-           OR f.qualified_name = $name
-        MATCH (caller:Function)-[:CALLS]->(f)
+        if repository_id:
 
-        RETURN caller.name AS function
-        """
+            query = """
+            MATCH (f:Function)
+            WHERE
+                (
+                    f.name = $name
+                    OR f.qualified_name = $name
+                )
+                AND f.repository_id = $repository_id
+
+            MATCH (caller:Function)-[:CALLS]->(f)
+
+            RETURN coalesce(caller.name, caller.qualified_name) AS function
+            """
+
+            params = {
+                "name": qualified_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (f:Function)
+            WHERE
+                f.name = $name
+                OR f.qualified_name = $name
+
+            MATCH (caller:Function)-[:CALLS]->(f)
+
+            RETURN coalesce(caller.name, caller.qualified_name) AS function
+            """
+
+            params = {
+                "name": qualified_name
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                name=qualified_name,
+                **params,
             )
 
             rows = [
@@ -358,10 +776,23 @@ class GraphQueries:
                 for record in result
             ]
 
-        print("\n========== CALLED BY ==========")
-        print("Target:", qualified_name)
-        print("CALLERS:", rows)
-        print("================================\n")
+        print(
+            "\n========== CALLED BY =========="
+        )
+
+        print(
+            "Target:",
+            qualified_name,
+        )
+
+        print(
+            "CALLERS:",
+            rows,
+        )
+
+        print(
+            "================================\n"
+        )
 
         return rows
 
@@ -372,19 +803,61 @@ class GraphQueries:
     def get_imports(
         self,
         file_path: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (f:File {path:$path})-[:IMPORTS]->(i:Import)
+        suffix_slash = "/" + file_path
+        suffix_backslash = "\\" + file_path
 
-        RETURN i.statement AS import_statement
-        """
+        if repository_id:
+
+            query = """
+            MATCH (f:File)
+            WHERE (
+                f.path = $path
+                OR f.name = $path
+                OR f.path ENDS WITH $suffix_slash
+                OR f.path ENDS WITH $suffix_backslash
+            )
+            AND f.repository_id = $repository_id
+            MATCH (f)-[:IMPORTS]->(i:Import)
+
+            RETURN i.statement AS import_statement
+            """
+
+            params = {
+                "path": file_path,
+                "suffix_slash": suffix_slash,
+                "suffix_backslash": suffix_backslash,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (f:File)
+            WHERE (
+                f.path = $path
+                OR f.name = $path
+                OR f.path ENDS WITH $suffix_slash
+                OR f.path ENDS WITH $suffix_backslash
+            )
+            MATCH (f)-[:IMPORTS]->(i:Import)
+
+            RETURN i.statement AS import_statement
+            """
+
+            params = {
+                "path": file_path,
+                "suffix_slash": suffix_slash,
+                "suffix_backslash": suffix_backslash,
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                path=file_path,
+                **params,
             )
 
             return [
@@ -395,17 +868,21 @@ class GraphQueries:
     # =====================================================
     # Files Importing A File
     # =====================================================
-    # =====================================================
-    # Files Importing A File
-    # =====================================================
 
     def get_files_importing(
         self,
         file_name: str,
+        repository_id: str | None = None,
     ):
 
-        print("\n========== GET FILES IMPORTING ==========")
-        print("SEARCHING FOR:", file_name)
+        print(
+            "\n========== GET FILES IMPORTING =========="
+        )
+
+        print(
+            "SEARCHING FOR:",
+            file_name,
+        )
 
         filename = os.path.basename(
             file_name
@@ -425,24 +902,58 @@ class GraphQueries:
             module_name,
         )
 
-        query = """
-        MATCH (f:File)-[:IMPORTS]->(i:Import)
+        if repository_id:
 
-        WHERE toLower(i.statement) CONTAINS toLower($module_name)
-           OR (
-                i.module IS NOT NULL
-                AND toLower(i.module) CONTAINS toLower($module_name)
-              )
+            query = """
+            MATCH (
+                f:File {
+                    repository_id:$repository_id
+                }
+            )-[:IMPORTS]->(i:Import)
 
-        RETURN f.path AS file
-        ORDER BY file
-        """
+            WHERE
+                toLower(i.statement) CONTAINS toLower($module_name)
+
+                OR (
+                    i.module IS NOT NULL
+                    AND toLower(i.module) CONTAINS toLower($module_name)
+                )
+
+            RETURN f.path AS file
+            ORDER BY file
+            """
+
+            params = {
+                "module_name": module_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (f:File)-[:IMPORTS]->(i:Import)
+
+            WHERE
+                toLower(i.statement) CONTAINS toLower($module_name)
+
+                OR (
+                    i.module IS NOT NULL
+                    AND toLower(i.module) CONTAINS toLower($module_name)
+                )
+
+            RETURN f.path AS file
+            ORDER BY file
+            """
+
+            params = {
+                "module_name": module_name
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                module_name=module_name,
+                **params,
             )
 
             rows = [
@@ -468,19 +979,44 @@ class GraphQueries:
     def get_class_dependencies(
         self,
         class_name: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (c:Class {name:$name})-[:DEPENDS_ON]->(dependency)
+        if repository_id:
 
-        RETURN dependency.name AS dependency
-        """
+            query = """
+            MATCH (c)
+            WHERE (c.name = $name OR c.qualified_name = $name)
+            AND c.repository_id = $repository_id
+            MATCH (c)-[:DEPENDS_ON]->(dependency)
+
+            RETURN coalesce(dependency.name, dependency.qualified_name, dependency.path) AS dependency
+            """
+
+            params = {
+                "name": class_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (c)
+            WHERE c.name = $name OR c.qualified_name = $name
+            MATCH (c)-[:DEPENDS_ON]->(dependency)
+
+            RETURN coalesce(dependency.name, dependency.qualified_name, dependency.path) AS dependency
+            """
+
+            params = {
+                "name": class_name
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                name=class_name,
+                **params,
             )
 
             return [
@@ -495,19 +1031,44 @@ class GraphQueries:
     def get_dependent_classes(
         self,
         class_name: str,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (dependency:Class {name:$name})<-[:DEPENDS_ON]-(cls)
+        if repository_id:
 
-        RETURN cls.name AS dependent
-        """
+            query = """
+            MATCH (dependency)
+            WHERE (dependency.name = $name OR dependency.qualified_name = $name)
+            AND (dependency.repository_id = $repository_id OR dependency.repository_id IS NULL)
+            MATCH (cls)-[:DEPENDS_ON]->(dependency)
+
+            RETURN coalesce(cls.name, cls.qualified_name, cls.path) AS dependent
+            """
+
+            params = {
+                "name": class_name,
+                "repository_id": repository_id,
+            }
+
+        else:
+
+            query = """
+            MATCH (dependency)
+            WHERE dependency.name = $name OR dependency.qualified_name = $name
+            MATCH (cls)-[:DEPENDS_ON]->(dependency)
+
+            RETURN coalesce(cls.name, cls.qualified_name, cls.path) AS dependent
+            """
+
+            params = {
+                "name": class_name
+            }
 
         with self.driver.session() as session:
 
             result = session.run(
                 query,
-                name=class_name,
+                **params,
             )
 
             return [
@@ -515,37 +1076,104 @@ class GraphQueries:
                 for record in result
             ]
 
-
-
     # =====================================================
     # Graph Statistics
     # =====================================================
 
-    def get_graph_statistics(self):
+    def get_graph_statistics(
+        self,
+        repository_id: str | None = None,
+    ):
 
-        query = """
-        MATCH (n)
-        WITH
-            count(CASE WHEN n:File THEN 1 END) AS files,
-            count(CASE WHEN n:Class THEN 1 END) AS classes,
-            count(CASE WHEN n:Function THEN 1 END) AS functions
+        if repository_id:
 
-        OPTIONAL MATCH ()-[r]->()
+            query = """
+            MATCH (n)
+            WHERE n.repository_id = $repository_id
 
-        RETURN
-            files,
-            classes,
-            functions,
-            count(r) AS relationships
-        """
+            WITH
+                count(
+                    CASE
+                        WHEN n:File THEN 1
+                    END
+                ) AS files,
+
+                count(
+                    CASE
+                        WHEN n:Class THEN 1
+                    END
+                ) AS classes,
+
+                count(
+                    CASE
+                        WHEN n:Function THEN 1
+                    END
+                ) AS functions
+
+            OPTIONAL MATCH (
+                source
+            )-[r]->(
+                target
+            )
+
+            WHERE
+                source.repository_id = $repository_id
+
+            RETURN
+                files,
+                classes,
+                functions,
+                count(r) AS relationships
+            """
+
+            params = {
+                "repository_id": repository_id
+            }
+
+        else:
+
+            query = """
+            MATCH (n)
+
+            WITH
+                count(
+                    CASE
+                        WHEN n:File THEN 1
+                    END
+                ) AS files,
+
+                count(
+                    CASE
+                        WHEN n:Class THEN 1
+                    END
+                ) AS classes,
+
+                count(
+                    CASE
+                        WHEN n:Function THEN 1
+                    END
+                ) AS functions
+
+            OPTIONAL MATCH ()-[r]->()
+
+            RETURN
+                files,
+                classes,
+                functions,
+                count(r) AS relationships
+            """
+
+            params = {}
 
         with self.driver.session() as session:
 
             record = session.run(
-                query
+                query,
+                **params,
             ).single()
 
             if not record:
+
                 return {
                     "files": 0,
                     "classes": 0,
@@ -560,36 +1188,118 @@ class GraphQueries:
                 "relationships": record["relationships"],
             }
 
-
-        # =====================================================
+    # =====================================================
     # Repository Dependency Graph
     # =====================================================
 
-    def get_dependency_graph(self):
+    def get_dependency_graph(
+        self,
+        repository_id: str | None = None,
+    ):
 
-        query = """
-        MATCH (source)-[r]->(target)
+        if repository_id:
 
-        RETURN
-            elementId(source) AS source_id,
-            labels(source)[0] AS source_type,
-            coalesce(source.name, source.path) AS source,
-            type(r) AS relationship,
-            elementId(target) AS target_id,
-            labels(target)[0] AS target_type,
-            coalesce(target.name, target.path) AS target
+            query = """
+            MATCH (source)-[r]->(target)
 
-        ORDER BY source, target
-        """
+            WHERE
+                source.repository_id = $repository_id
+
+            RETURN
+                elementId(source) AS source_id,
+                labels(source)[0] AS source_type,
+                coalesce(
+                    source.name,
+                    source.qualified_name,
+                    source.path
+                ) AS source,
+                type(r) AS relationship,
+                elementId(target) AS target_id,
+                labels(target)[0] AS target_type,
+                coalesce(
+                    target.name,
+                    target.qualified_name,
+                    target.path
+                ) AS target
+
+            ORDER BY source, target
+            """
+
+            params = {
+                "repository_id": repository_id
+            }
+
+        else:
+
+            query = """
+            MATCH (source)-[r]->(target)
+
+            RETURN
+                elementId(source) AS source_id,
+                labels(source)[0] AS source_type,
+                coalesce(
+                    source.name,
+                    source.qualified_name,
+                    source.path
+                ) AS source,
+                type(r) AS relationship,
+                elementId(target) AS target_id,
+                labels(target)[0] AS target_type,
+                coalesce(
+                    target.name,
+                    target.qualified_name,
+                    target.path
+                ) AS target
+
+            ORDER BY source, target
+            """
+
+            params = {}
 
         with self.driver.session() as session:
 
-            result = session.run(query)
+            result = session.run(
+                query,
+                **params,
+            )
 
-            return [
+            records = [
                 dict(record)
                 for record in result
             ]
+
+        print(
+            "\n========== DEPENDENCY GRAPH DEBUG =========="
+        )
+
+        print(
+            "Repository ID:",
+            repository_id,
+        )
+
+        print(
+            "Dependency relationships:",
+            len(records),
+        )
+
+        if records:
+
+            print(
+                "First relationship:",
+                records[0],
+            )
+
+        else:
+
+            print(
+                "NO DEPENDENCY RELATIONSHIPS FOUND"
+            )
+
+        print(
+            "============================================\n"
+        )
+
+        return records
 
     # =====================================================
     # DEBUG FUNCTIONS
@@ -597,31 +1307,66 @@ class GraphQueries:
 
     def debug_functions(
         self,
+        repository_id: str | None = None,
     ):
 
-        query = """
-        MATCH (f:Function)
-        RETURN
-            f.name AS name,
-            f.qualified_name AS qualified_name
-        ORDER BY name
-        """
+        if repository_id:
+
+            query = """
+            MATCH (f:Function)
+            WHERE f.repository_id = $repository_id
+
+            RETURN
+                f.name AS name,
+                f.qualified_name AS qualified_name
+
+            ORDER BY name
+            """
+
+            params = {
+                "repository_id": repository_id
+            }
+
+        else:
+
+            query = """
+            MATCH (f:Function)
+
+            RETURN
+                f.name AS name,
+                f.qualified_name AS qualified_name
+
+            ORDER BY name
+            """
+
+            params = {}
 
         with self.driver.session() as session:
 
-            result = session.run(query)
+            result = session.run(
+                query,
+                **params,
+            )
 
             rows = [
                 dict(record)
                 for record in result
             ]
 
-        print("\n========== NEO4J FUNCTIONS ==========")
+        print(
+            "\n========== NEO4J FUNCTIONS =========="
+        )
 
         for row in rows:
             print(row)
 
-        print("TOTAL FUNCTIONS:", len(rows))
-        print("====================================\n")
+        print(
+            "TOTAL FUNCTIONS:",
+            len(rows),
+        )
+
+        print(
+            "====================================\n"
+        )
 
         return rows

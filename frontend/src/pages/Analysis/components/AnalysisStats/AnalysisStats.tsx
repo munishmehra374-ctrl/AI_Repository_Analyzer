@@ -16,7 +16,7 @@ const AnalysisStats = ({
 }: AnalysisStatsProps) => {
     const stats = [
         {
-            label: "MODULES",
+            label: "FILES",
             value: statistics.files,
         },
         {

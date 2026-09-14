@@ -9,7 +9,8 @@ from app.core.redis import redis_client
 from app.graph.dependencies import dependencies
 
 import json
-
+import hashlib
+from pathlib import Path
 
 class IndexingService:
 
@@ -32,15 +33,103 @@ class IndexingService:
         # Pipeline 3
         self.metadata_service = RepositoryMetadataService()
 
+
+    # =====================================================
+    # File Fingerprinting
+    # =====================================================
+
+    @staticmethod
+    def _get_file_hash(file_path: str) -> str:
+
+        with open(
+            file_path,
+            "rb",
+        ) as f:
+
+            return hashlib.sha256(
+                f.read()
+            ).hexdigest()
+
+
+    @classmethod
+    def _get_file_hashes(
+        cls,
+        source_files: list[str],
+    ) -> dict[str, str]:
+
+        return {
+            str(file_path): cls._get_file_hash(
+                file_path
+            )
+            for file_path in source_files
+        }
+
+
+    def _get_extracted_data_key(
+        self,
+        repository_id: str,
+        file_path: str,
+    ) -> str:
+
+        return f"extracted:{repository_id}:{file_path}"
+
+
+    def _save_extracted_data(
+        self,
+        repository_id: str,
+        file_path: str,
+        extracted_data: dict,
+    ):
+
+        redis_client.set(
+            self._get_extracted_data_key(
+                repository_id,
+                file_path,
+            ),
+            json.dumps(extracted_data),
+        )
+
+
+    def _load_extracted_data(
+        self,
+        repository_id: str,
+        file_path: str,
+    ):
+
+        data = redis_client.get(
+            self._get_extracted_data_key(
+                repository_id,
+                file_path,
+            )
+        )
+
+        if not data:
+            return None
+
+        if isinstance(data, bytes):
+            data = data.decode("utf-8")
+
+        return json.loads(data)
+
     # =====================================================
     # Repository Indexing
     # =====================================================
+
+  
 
     def index_repository(
         self,
         repository_path: str,
         task_id=None,
+        repository_id: str | None = None,
     ):
+
+        self.metadata_service = RepositoryMetadataService()
+
+        if not repository_id:
+            raise ValueError(
+                "repository_id is required for repository indexing."
+        )
 
         print("INDEXING SERVICE STARTED")
         print("TASK ID:", task_id)
@@ -51,6 +140,95 @@ class IndexingService:
 
         print("FOUND FILES:", len(source_files))
 
+        # =====================================================
+        # Incremental Indexing
+        # =====================================================
+
+        current_file_hashes = self._get_file_hashes(
+            source_files
+        )
+
+# =====================================================
+# Load Previous File Hashes
+# =====================================================
+
+        hash_key = f"file_hashes:{repository_id}"
+
+        previous_hashes_raw = redis_client.get(
+            hash_key
+        )
+
+        if previous_hashes_raw:
+
+            if isinstance(previous_hashes_raw, bytes):
+                previous_hashes_raw = (
+                    previous_hashes_raw.decode("utf-8")
+                )
+
+            previous_file_hashes = json.loads(
+                previous_hashes_raw
+            )
+
+        else:
+
+            previous_file_hashes = {}
+
+
+        # =====================================================
+        # Detect Changed / New Files
+        # =====================================================
+
+        changed_files = []
+        unchanged_files = []
+
+        for file_path, current_hash in current_file_hashes.items():
+
+            previous_hash = previous_file_hashes.get(
+                file_path
+            )
+
+            if previous_hash == current_hash:
+
+                unchanged_files.append(file_path)
+
+            else:
+
+                changed_files.append(file_path)
+
+
+        print("\n========== INCREMENTAL INDEXING ==========")
+
+        print(
+            "TOTAL FILES:",
+            len(current_file_hashes)
+        )
+
+        print(
+            "CHANGED / NEW:",
+            len(changed_files)
+        )
+
+        print(
+            "UNCHANGED:",
+            len(unchanged_files)
+        )
+
+        print("\nCHANGED / NEW FILES:")
+
+        for file_path in changed_files:
+            print("  ", file_path)
+
+        print("\nUNCHANGED FILES:")
+
+        for file_path in unchanged_files:
+            print("  ", file_path)
+
+        print("==========================================\n")
+
+        print("\nCURRENT FILE HASHES:")
+        for file_path, file_hash in current_file_hashes.items():
+            print(file_path, "->", file_hash)
+
         if task_id:
 
             redis_client.hset(
@@ -59,6 +237,7 @@ class IndexingService:
                     "status": "STARTED",
                     "stage": "Reading Repository",
                     "progress": 5,
+                    "repository_id": repository_id,
                 },
             )
 
@@ -96,6 +275,31 @@ class IndexingService:
 
         all_extracted_data = []
 
+        # =====================================================
+        # Load extracted data for unchanged files
+        # =====================================================
+
+        for file_path in unchanged_files:
+
+            previous_data = self._load_extracted_data(
+                repository_id=repository_id,
+                file_path=file_path,
+            )
+
+            if previous_data is not None:
+
+                previous_data["file_path"] = file_path
+                previous_data["repository_path"] = repository_path
+                previous_data["repository_id"] = repository_id
+                previous_data["repository_name"] = (
+                    repository_path.split("\\")[-1]
+                )
+                previous_data["language"] = "python"
+
+                all_extracted_data.append(
+                    previous_data
+                )
+
         try:
 
             # =================================================
@@ -109,6 +313,7 @@ class IndexingService:
                     mapping={
                         "stage": "Parsing Source Files",
                         "progress": 10,
+                        "repository_id": repository_id,
                     },
                 )
 
@@ -120,7 +325,7 @@ class IndexingService:
                 )
 
             for index, file_path in enumerate(
-                source_files
+                changed_files
             ):
 
                 result = (
@@ -131,6 +336,7 @@ class IndexingService:
 
                 chunks = result["chunks"]
                 extracted_data = result["ast"]
+
 
                 if self.DEBUG:
 
@@ -173,6 +379,8 @@ class IndexingService:
                     "repository_path"
                 ] = repository_path
 
+                extracted_data["repository_id"] = repository_id
+
                 extracted_data[
                     "repository_name"
                 ] = repository_path.split(
@@ -184,16 +392,28 @@ class IndexingService:
                 ] = "python"
 
                 # =============================================
-                # IMPORTANT:
-                #
-                # Do NOT build the graph here.
-                #
-                # Store this file's extracted data.
-                # =============================================
+            # Save extracted data for incremental graph
+            # =============================================
+
+                self._save_extracted_data(
+                    repository_id=repository_id,
+                    file_path=file_path,
+                    extracted_data=extracted_data,
+                )
+
+
+
+                    # =============================================
+                    # IMPORTANT:
+                    #
+                    # Do NOT build the graph here.
+                    #
+                    # Store this file's extracted data.
+                    # =============================================
 
                 all_extracted_data.append(
-                    extracted_data
-                )
+                        extracted_data
+                    )
 
                 # =============================================
                 # Pipeline 3:
@@ -233,7 +453,7 @@ class IndexingService:
                                 (index + 1)
                                 * 55
                             )
-                            / total_files
+                            / len(changed_files)
                         )
                     )
 
@@ -256,7 +476,7 @@ class IndexingService:
                                 index + 1,
 
                             "total_files":
-                                total_files,
+                                len(changed_files),
                         },
                     )
 
@@ -322,9 +542,13 @@ class IndexingService:
             graph = (
                 self.graph_service.build_graph(
                     extracted_files=
-                        all_extracted_data
+                        all_extracted_data,
+                    repository_id=
+                        repository_id,
+                     changed_files=
+                        changed_files,
                 )
-            )
+    )
 
             print(
                 "FINAL GRAPH FILES:",
@@ -340,7 +564,6 @@ class IndexingService:
                 "FINAL GRAPH RELATIONSHIPS:",
                 len(graph.relationships),
             )
-
             # =================================================
             # Pipeline 1:
             # Semantic Retrieval
@@ -359,8 +582,65 @@ class IndexingService:
                     },
                 )
 
+            # -------------------------------------------------
+            # Clear previous vector index
+            # -------------------------------------------------
+
+            self.vector_store.clear_files(
+                repository_id,
+                changed_files,
+            )
+
+            # -------------------------------------------------
+            # Add only changed-file chunks
+            # -------------------------------------------------
+
+            changed_chunks = [
+                chunk
+                for chunk in all_chunks
+                if chunk["file_path"] in changed_files
+            ]
+
+            print(
+                "\n========== CHROMA INCREMENTAL DEBUG =========="
+            )
+
+            print(
+                "Repository:",
+                repository_id,
+            )
+
+            print(
+                "Changed files:",
+                len(changed_files),
+            )
+
+            print(
+                "All chunks:",
+                len(all_chunks),
+            )
+
+            print(
+                "Changed chunks:",
+                len(changed_chunks),
+            )
+
+            for chunk in changed_chunks:
+
+                print(
+                    "ADD:",
+                    chunk["file_path"],
+                    "|",
+                    chunk["chunk_id"],
+                )
+
+            print(
+                "=============================================="
+            )
+
             self.vector_store.add_documents(
-                all_chunks
+                changed_chunks,
+                repository_id,
             )
 
             if task_id:
@@ -375,14 +655,59 @@ class IndexingService:
                             90,
                     },
                 )
+          # =================================================
+          # Incremental BM25 Index
+          # =================================================
 
-            self.bm25_index.build_index(
-                all_chunks
+            bm25_index_path = (
+                Path("bm25_db")
+                / repository_id
+                / "bm25.pkl"
             )
 
-            self.bm25_index.save(
-                "bm25_db"
-            )
+            if not all_chunks:
+
+                print(
+                    "\n========== SKIPPING BM25 =========="
+                )
+                print(
+                    "WARNING: all_chunks is empty."
+                )
+
+            else:
+
+                if bm25_index_path.exists():
+
+                    print(
+                        "\n========== LOADING EXISTING BM25 =========="
+                    )
+
+                    self.bm25_index.load(
+                        "bm25_db",
+                        repository_id,
+                    )
+
+                    self.bm25_index.update_files(
+                        chunks=all_chunks,
+                        repository_id=repository_id,
+                        changed_files=changed_files,
+                    )
+
+                else:
+
+                    print(
+                        "\n========== BUILDING INITIAL BM25 =========="
+                    )
+
+                    self.bm25_index.build_index(
+                        all_chunks,
+                        repository_id,
+                    )
+
+                self.bm25_index.save(
+                    "bm25_db",
+                    repository_id,
+                )
             # =================================================
             # Initialize Retrieval Pipeline
             # =================================================
@@ -390,6 +715,7 @@ class IndexingService:
             dependencies.initialize(
                 vector_store=self.vector_store,
                 bm25_index=self.bm25_index,
+                repository_id=repository_id,
             )
 
             print("=" * 60)
@@ -429,10 +755,13 @@ class IndexingService:
                     )
                 )
 
-            repository_profile = (
-                self.metadata_service
-                .get_repository_profile()
-            )
+                repository_profile = (
+                    self.metadata_service
+                    .build_from_extracted_data(
+                        extracted_files=all_extracted_data,
+                        repository_path=repository_path,
+                    )
+                )
 
             # =================================================
             # Save Repository Profile
@@ -443,11 +772,17 @@ class IndexingService:
                 profile_data = {
                     **repository_profile,
                     "source_files": source_files,
+                    "repository_id": repository_id,
                 }
 
                 redis_client.set(
                     f"profile:{task_id}",
                     json.dumps(profile_data),
+                )
+
+                redis_client.set(
+                    f"profile:repository:{repository_id}",
+                    json.dumps(profile_data)
                 )
 
                 redis_client.hset(
@@ -461,6 +796,9 @@ class IndexingService:
 
                         "progress":
                             100,
+
+                        "repository_id": 
+                           repository_id,
                     },
                 )
 
@@ -492,6 +830,23 @@ class IndexingService:
                 "=" * 70
             )
 
+            # =====================================================
+            # Save Current File Hashes
+            # =====================================================
+
+            redis_client.set(
+                hash_key,
+                json.dumps(
+                    current_file_hashes
+                )
+            )
+
+            print(
+                "FILE HASHES SAVED:",
+                hash_key
+            )
+
+
             return {
                 "status":
                     "success",
@@ -504,6 +859,9 @@ class IndexingService:
 
                 "repository_profile":
                     repository_profile,
+
+                "repository_id": 
+                     repository_id,
             }
 
         except Exception as e:

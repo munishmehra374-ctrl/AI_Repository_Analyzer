@@ -1,0 +1,334 @@
+/* =====================================================
+CHAT SIDEBAR
+===================================================== */
+
+.chat-sidebar {
+    width: 320px;
+
+    height: 100%;
+
+    flex-shrink: 0;
+
+    display: flex;
+
+    flex-direction: column;
+
+    box-sizing: border-box;
+
+    padding: 20px 12px;
+
+    background: #070b14;
+
+    color: white;
+
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+
+    overflow-y: auto;
+}
+
+
+/* =====================================================
+NEW CHAT BUTTON
+===================================================== */
+
+.new-chat-button {
+    width: 100%;
+
+    min-height: 46px;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    padding: 0 14px;
+
+    border: 1px solid rgba(255, 255, 255, 0.12);
+
+    border-radius: 12px;
+
+    background: #111827;
+
+    color: white;
+
+    font-family: inherit;
+
+    font-size: 15px;
+
+    font-weight: 500;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.new-chat-button:hover {
+    background: #172033;
+
+    border-color: rgba(96, 165, 250, 0.45);
+
+    box-shadow:
+        0 5px 18px rgba(0, 0, 0, 0.25);
+
+    transform: translateY(-1px);
+}
+
+.new-chat-button:active {
+    transform: scale(0.98);
+}
+
+
+/* =====================================================
+NEW CHAT ICON
+===================================================== */
+
+.new-chat-icon {
+    width: 22px;
+
+    height: 22px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border-radius: 6px;
+
+    font-size: 21px;
+
+    line-height: 1;
+
+    font-weight: 300;
+
+    color: #93c5fd;
+}
+
+
+/* =====================================================
+CHAT HISTORY
+===================================================== */
+
+.chat-history {
+    margin-top: 28px;
+
+    min-height: 0;
+}
+
+
+/* =====================================================
+HISTORY TITLE
+===================================================== */
+
+.history-title {
+    padding: 0 10px;
+
+    margin-bottom: 10px;
+
+    color: #8c94a6;
+
+    font-size: 12px;
+
+    font-weight: 600;
+
+    text-transform: uppercase;
+
+    letter-spacing: 0.06em;
+}
+
+
+/* =====================================================
+CHAT HISTORY WRAPPER
+===================================================== */
+
+.chat-history-wrapper {
+    width: 100%;
+
+    display: flex;
+
+    align-items: center;
+
+    margin-bottom: 4px;
+
+    border-radius: 9px;
+
+    background: transparent;
+
+    transition:
+        background 0.2s ease;
+}
+
+.chat-history-wrapper:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.chat-history-wrapper.active {
+    background: rgba(59, 130, 246, 0.12);
+
+    box-shadow:
+        inset 2px 0 0 #3b82f6;
+}
+
+
+/* =====================================================
+CHAT ITEM
+===================================================== */
+
+.chat-history-item {
+    flex: 1;
+
+    min-width: 0;
+
+    display: block;
+
+    padding: 13px 12px;
+
+    border: none;
+
+    background: transparent;
+
+    color: #d7dce7;
+
+    text-align: left;
+
+    font-family: inherit;
+
+    font-size: 15px;
+
+    font-weight: 500;
+
+    cursor: pointer;
+}
+
+.chat-history-wrapper:hover
+.chat-history-item {
+
+    color: white;
+}
+
+.chat-history-wrapper.active
+.chat-history-item {
+
+    color: white;
+
+    font-weight: 500;
+}
+
+
+/* =====================================================
+CHAT TITLE
+===================================================== */
+
+.chat-title {
+    display: block;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+
+/* =====================================================
+DELETE CHAT BUTTON
+===================================================== */
+
+.delete-chat-button {
+    width: 30px;
+
+    height: 30px;
+
+    flex-shrink: 0;
+
+    margin-right: 5px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border: none;
+
+    border-radius: 7px;
+
+    background: transparent;
+
+    color: #6b7280;
+
+    font-size: 19px;
+
+    line-height: 1;
+
+    cursor: pointer;
+
+    opacity: 0;
+
+    transition:
+        opacity 0.2s ease,
+        background 0.2s ease,
+        color 0.2s ease;
+}
+
+.chat-history-wrapper:hover
+.delete-chat-button {
+
+    opacity: 1;
+}
+
+.delete-chat-button:hover {
+    background: rgba(239, 68, 68, 0.14);
+
+    color: #f87171;
+}
+
+
+/* =====================================================
+NO CHATS
+===================================================== */
+
+.no-chats {
+    padding: 10px;
+
+    color: #697386;
+
+    font-size: 13px;
+}
+
+
+/* =====================================================
+SCROLLBAR
+===================================================== */
+
+.chat-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-sidebar::-webkit-scrollbar-thumb {
+    background: #2f4b7c;
+
+    border-radius: 20px;
+}
+
+.chat-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+
+/* =====================================================
+MOBILE
+===================================================== */
+
+@media (max-width: 768px) {
+
+    .chat-sidebar {
+        width: 220px;
+    }
+
+}

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import re
-
+from app.knowledge.entity_resolver import EntityResolver
 from app.retrieval.context_optimizer import ContextOptimizer
 from app.retrieval.hybrid_retriever import HybridRetriever
 from app.retrieval.reranker import CrossEncoderReranker
@@ -11,6 +10,22 @@ from app.retrieval.rrf import ReciprocalRankFusion
 class RetrievalService:
     """
     Orchestrates the complete retrieval pipeline.
+
+    Pipeline:
+
+        Question
+            ↓
+        Entity Resolution
+            ↓
+        Hybrid Retrieval
+            ↓
+        Reciprocal Rank Fusion
+            ↓
+        Cross Encoder Re-ranking
+            ↓
+        Context Optimization
+            ↓
+        Structured Context
     """
 
     def __init__(
@@ -19,50 +34,17 @@ class RetrievalService:
         rrf: ReciprocalRankFusion,
         reranker: CrossEncoderReranker,
         context_optimizer: ContextOptimizer,
-    ) -> None:
-
+        entity_resolver: EntityResolver,
+    ):
         self._hybrid_retriever = hybrid_retriever
         self._rrf = rrf
         self._reranker = reranker
         self._context_optimizer = context_optimizer
+        self._entity_resolver = entity_resolver
 
-    # ------------------------------------------------------------------ #
-    # Identifier Detection
-    # ------------------------------------------------------------------ #
-
-    @staticmethod
-    def _extract_identifier(
-        question: str,
-    ) -> str | None:
-        """
-        Extract an explicitly mentioned function/class identifier.
-
-        Example:
-            "Explain index_repository()"
-            -> "index_repository"
-        """
-
-        match = re.search(
-            r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(",
-            question,
-        )
-
-        if match:
-            return match.group(1)
-
-        match = re.search(
-            r"`([A-Za-z_][A-Za-z0-9_]*)`",
-            question,
-        )
-
-        if match:
-            return match.group(1)
-
-        return None
-
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
     # Chunk Helpers
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _get_metadata_value(
@@ -71,7 +53,7 @@ class RetrievalService:
         default="",
     ):
         """
-        Get metadata from either:
+        Read metadata from either:
 
         1. LangChain Document
         2. Dictionary chunk
@@ -84,18 +66,21 @@ class RetrievalService:
                 default,
             )
 
-        return chunk.get(
-            key,
-            default,
-        )
+        if isinstance(chunk, dict):
+
+            return chunk.get(
+                key,
+                default,
+            )
+
+        return default
 
     @staticmethod
     def _get_chunk_id(
         chunk,
     ):
         """
-        Get chunk_id from either a LangChain Document
-        or a dictionary chunk.
+        Get chunk_id from a Document or dictionary.
         """
 
         return RetrievalService._get_metadata_value(
@@ -105,23 +90,25 @@ class RetrievalService:
         )
 
     @staticmethod
-    def _find_exact_identifier(
+    def _find_exact_entity(
         chunks,
-        identifier: str | None,
+        entity_name: str | None,
     ):
         """
-        Find a chunk whose name or qualified_name exactly
-        matches the requested identifier.
+        Find a chunk whose repository entity name
+        exactly matches the entity resolved from Neo4j.
 
-        Supports both:
-        - LangChain Document objects
-        - Dictionary chunks
+        No hardcoded class/function names are used.
         """
 
-        if not identifier:
+        if not entity_name:
             return None
 
-        identifier_lower = identifier.lower()
+        target = (
+            entity_name
+            .strip()
+            .lower()
+        )
 
         for chunk in chunks:
 
@@ -131,7 +118,7 @@ class RetrievalService:
                     "name",
                     "",
                 )
-            ).lower()
+            ).strip().lower()
 
             qualified_name = str(
                 RetrievalService._get_metadata_value(
@@ -139,19 +126,64 @@ class RetrievalService:
                     "qualified_name",
                     "",
                 )
-            ).lower()
+            ).strip().lower()
 
             if (
-                name == identifier_lower
-                or qualified_name == identifier_lower
+                name == target
+                or qualified_name == target
             ):
+
                 return chunk
 
         return None
 
-    # ------------------------------------------------------------------ #
-    # Move Exact Match To Front
-    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _mark_exact_entity(
+        chunks,
+        entity_name: str | None,
+    ):
+        """
+        Mark chunks belonging to the resolved entity.
+
+        This allows ContextOptimizer to prioritize
+        the exact entity without hardcoding names.
+        """
+
+        if not entity_name:
+            return chunks
+
+        target = (
+            entity_name
+            .strip()
+            .lower()
+        )
+
+        for chunk in chunks:
+
+            name = str(
+                RetrievalService._get_metadata_value(
+                    chunk,
+                    "name",
+                    "",
+                )
+            ).strip().lower()
+
+            qualified_name = str(
+                RetrievalService._get_metadata_value(
+                    chunk,
+                    "qualified_name",
+                    "",
+                )
+            ).strip().lower()
+
+            chunk[
+                "is_exact_identifier_match"
+            ] = (
+                name == target
+                or qualified_name == target
+            )
+
+        return chunks
 
     @staticmethod
     def _move_exact_match_to_front(
@@ -159,10 +191,7 @@ class RetrievalService:
         exact_chunk_id,
     ):
         """
-        Move the exact requested chunk to the beginning
-        of a list.
-
-        Works with dictionary chunks.
+        Move the exact entity chunk to the beginning.
         """
 
         if not exact_chunk_id:
@@ -185,7 +214,9 @@ class RetrievalService:
 
             else:
 
-                remaining_chunks.append(chunk)
+                remaining_chunks.append(
+                    chunk
+                )
 
         if exact_chunk is None:
             return chunks
@@ -194,12 +225,60 @@ class RetrievalService:
             exact_chunk
         ] + remaining_chunks
 
-    # ------------------------------------------------------------------ #
-    # Public API
-    # ------------------------------------------------------------------ #
-    def retrieve(
+    def _ensure_exact_entity(
         self,
-        question: str,
+        chunks,
+        exact_match,
+        exact_chunk_id,
+    ):
+        """
+        Ensure the resolved exact entity remains
+        available in the candidate list.
+
+        This is generic and does not hardcode
+        any repository entity name.
+        """
+
+        if not exact_match or not exact_chunk_id:
+            return chunks
+
+        # ----------------------------------------------------------
+        # Check whether the exact entity is already present
+        # ----------------------------------------------------------
+
+        for chunk in chunks:
+
+            if (
+                self._get_chunk_id(chunk)
+                == exact_chunk_id
+            ):
+                return chunks
+
+        # ----------------------------------------------------------
+        # Exact entity was removed by a previous stage.
+        # Restore it.
+        # ----------------------------------------------------------
+
+        exact_match = exact_match.copy()
+
+        exact_match[
+            "is_exact_identifier_match"
+        ] = True
+
+        return [
+            exact_match,
+            *chunks,
+        ]
+
+        # ------------------------------------------------------------------
+    # Public Retrieval API
+    # ------------------------------------------------------------------
+
+    def retrieve(
+    self,
+    question: str,
+    return_candidates: bool = False,
+    repository_id: str | None = None,
     ) -> str:
 
         print(
@@ -211,36 +290,56 @@ class RetrievalService:
             question,
         )
 
-        # -----------------------------------------
-        # Query Analysis
-        # -----------------------------------------
+        print(
+           "Repository ID:",
+            repository_id,
+         )
 
-        identifier = self._extract_identifier(
+        # ==============================================================
+        # STEP 0 : ENTITY RESOLUTION
+        # ==============================================================
+
+        entity = self._entity_resolver.resolve(
             question
         )
 
-        print(
-            "\n========== QUERY ANALYSIS =========="
+        entity_type = entity.get(
+            "type"
+        )
+
+        entity_name = entity.get(
+            "name"
         )
 
         print(
-            "Detected Identifier:",
-            identifier,
+            "\n========== ENTITY RESOLUTION =========="
         )
 
         print(
-            "====================================\n"
+            "Entity Type:",
+            entity_type,
         )
 
-        # -----------------------------------------
-        # Step 1 : Hybrid Retrieval
-        # -----------------------------------------
+        print(
+            "Entity Name:",
+            entity_name,
+        )
+
+        print(
+            "========================================\n"
+        )
+
+        # ==============================================================
+        # STEP 1 : HYBRID RETRIEVAL
+        # ==============================================================
 
         results = self._hybrid_retriever.retrieve(
-            query=question,
-            vector_k=20,
-            bm25_k=20,
-        )
+                query=question,
+                vector_k=20,
+                bm25_k=20,
+                entity_name=entity_name,
+                repository_id=repository_id,
+            )
 
         vector_results = results[
             "vector_results"
@@ -260,25 +359,130 @@ class RetrievalService:
             f"{len(bm25_results)}"
         )
 
-        # -----------------------------------------
-        # Step 1A : Find Exact Identifier
-        # -----------------------------------------
+        # ==============================================================
+        # STEP 1A : DEBUG RAW HYBRID RESULTS
+        # ==============================================================
 
-        exact_match = (
-            self._find_exact_identifier(
-                bm25_results,
-                identifier,
-            )
+        print(
+            "\n========== RAW HYBRID RESULTS =========="
         )
 
-        if exact_match is None:
+        print(
+            "\n----- VECTOR RESULTS -----"
+        )
 
-            exact_match = (
-                self._find_exact_identifier(
-                    vector_results,
-                    identifier,
+        for i, chunk in enumerate(
+            vector_results
+        ):
+
+            print(
+                f"\nVECTOR RESULT {i}:"
+            )
+
+            print(
+                "Name:",
+                self._get_metadata_value(
+                    chunk,
+                    "name",
+                    "",
                 )
             )
+
+            print(
+                "Qualified:",
+                self._get_metadata_value(
+                    chunk,
+                    "qualified_name",
+                    "",
+                )
+            )
+
+            print(
+                "File:",
+                self._get_metadata_value(
+                    chunk,
+                    "file_path",
+                    "",
+                )
+            )
+
+        print(
+            "\n----- BM25 RESULTS -----"
+        )
+
+        for i, chunk in enumerate(
+            bm25_results
+        ):
+
+            print(
+                f"\nBM25 RESULT {i}:"
+            )
+
+            print(
+                "Name:",
+                self._get_metadata_value(
+                    chunk,
+                    "name",
+                    "",
+                )
+            )
+
+            print(
+                "Qualified:",
+                self._get_metadata_value(
+                    chunk,
+                    "qualified_name",
+                    "",
+                )
+            )
+
+            print(
+                "File:",
+                self._get_metadata_value(
+                    chunk,
+                    "file_path",
+                    "",
+                )
+            )
+
+            print(
+                "BM25 Score:",
+                self._get_metadata_value(
+                    chunk,
+                    "bm25_score",
+                    "",
+                )
+            )
+
+        print(
+            "========================================\n"
+        )
+
+        # ==============================================================
+        # STEP 1B : EXACT ENTITY MATCH
+        # ==============================================================
+
+        exact_match = None
+
+        if entity_name:
+
+            exact_match = (
+                self._find_exact_entity(
+                    bm25_results,
+                    entity_name,
+                )
+            )
+
+            if exact_match is None:
+
+                exact_match = (
+                    self._find_exact_entity(
+                        vector_results,
+                        entity_name,
+                    )
+                )
+
+        exact_chunk_id = None
 
         if exact_match:
 
@@ -289,12 +493,17 @@ class RetrievalService:
             )
 
             print(
-                "\n========== EXACT MATCH FOUND =========="
+                "\n========== EXACT ENTITY MATCH FOUND =========="
             )
 
             print(
-                "Identifier:",
-                identifier,
+                "Entity Type:",
+                entity_type,
+            )
+
+            print(
+                "Entity Name:",
+                entity_name,
             )
 
             print(
@@ -302,6 +511,7 @@ class RetrievalService:
                 self._get_metadata_value(
                     exact_match,
                     "name",
+                    "",
                 ),
             )
 
@@ -310,6 +520,7 @@ class RetrievalService:
                 self._get_metadata_value(
                     exact_match,
                     "file_path",
+                    "",
                 ),
             )
 
@@ -318,6 +529,7 @@ class RetrievalService:
                 self._get_metadata_value(
                     exact_match,
                     "type",
+                    "",
                 ),
             )
 
@@ -327,238 +539,175 @@ class RetrievalService:
             )
 
             print(
-                "=======================================\n"
+                "==============================================\n"
             )
 
         else:
 
-            exact_chunk_id = None
-
             print(
-                "\n========== EXACT MATCH NOT FOUND =========="
+                "\n========== EXACT ENTITY MATCH NOT FOUND =========="
             )
 
             print(
-                "Identifier:",
-                identifier,
+                "Entity Type:",
+                entity_type,
             )
 
             print(
-                "===========================================\n"
+                "Entity Name:",
+                entity_name,
             )
 
-        # -----------------------------------------
-        # Step 2 : Reciprocal Rank Fusion
-        # -----------------------------------------
+            print(
+                "===================================================\n"
+            )
+        # ==============================================================
+        # STEP 2 : RECIPROCAL RANK FUSION
+        # ==============================================================
 
         fused_results = self._rrf.fuse(
             vector_results=vector_results,
             bm25_results=bm25_results,
         )
 
-        print(
-            f"\nFused Results : "
-            f"{len(fused_results)}"
-        )
+        print(f"\nFused Results : {len(fused_results)}")
 
-        # -----------------------------------------
-        # Step 2A : Preserve Exact Match
-        # -----------------------------------------
+        # Tag and preserve exact entity matches in RRF results
+        fused_results = self._mark_exact_entity(fused_results, entity_name)
 
         if exact_chunk_id:
-
-            fused_results = (
-                self._move_exact_match_to_front(
-                    fused_results,
-                    exact_chunk_id,
-                )
+            fused_results = self._ensure_exact_entity(
+                fused_results,
+                exact_match,
+                exact_chunk_id,
+            )
+            fused_results = self._move_exact_match_to_front(
+                fused_results,
+                exact_chunk_id,
             )
 
         if fused_results:
+            print("\nFirst Fused Result:")
+            print(fused_results[0])
 
-            print(
-                "\nFirst Fused Result:"
-            )
+        # ==============================================================
+        # STEP 3 : CROSS ENCODER RE-RANKING
+        # ==============================================================
 
-            print(
-                fused_results[0]
-            )
-
-        # -----------------------------------------
-        # Step 3 : Cross Encoder Re-ranking
-        # -----------------------------------------
-
-        reranked_results = (
-            self._reranker.rerank(
-                query=question,
-                chunks=fused_results,
-                top_k=10,
-            )
+        reranked_results = self._reranker.rerank(
+            query=question,
+            chunks=fused_results,
+            top_k=20,
         )
 
-        print(
-            f"\nReranked Results : "
-            f"{len(reranked_results)}"
-        )
-
-        # -----------------------------------------
-        # Step 3A : Preserve Exact Match
-        # -----------------------------------------
+        # Re-ensure exact match integrity post-reranking
+        reranked_results = self._mark_exact_entity(reranked_results, entity_name)
 
         if exact_chunk_id:
-
-            reranked_results = (
-                self._move_exact_match_to_front(
-                    reranked_results,
-                    exact_chunk_id,
-                )
+            reranked_results = self._ensure_exact_entity(
+                reranked_results,
+                exact_match,
+                exact_chunk_id,
             )
+            reranked_results = self._mark_exact_entity(reranked_results, entity_name)
+            reranked_results = self._move_exact_match_to_front(
+                reranked_results,
+                exact_chunk_id,
+            )
+
+        # ==============================================================
+        # GLOBAL CONTEXT SELECTION CANDIDATES
+        # ==============================================================
+
+        if return_candidates:
+            print("\n========== RETRIEVAL CANDIDATES ==========")
+            print("Candidate count:", len(reranked_results))
+
+            for index, chunk in enumerate(reranked_results, start=1):
+                name_val = self._get_metadata_value(chunk, "name", "")
+                file_val = self._get_metadata_value(chunk, "file_path", "")
+                ce_score = self._get_metadata_value(chunk, "cross_encoder_score", 0.0)
+                rrf_score = self._get_metadata_value(chunk, "rrf_score", 0.0)
+                exact_match_flag = chunk.get("is_exact_identifier_match", False) or \
+                                  self._get_metadata_value(chunk, "is_exact_identifier_match", False)
+
+                # Standardize top-level dictionary keys for ContextSelectionService
+                chunk["is_exact_identifier_match"] = exact_match_flag
+
+                print(f"\nCandidate {index}")
+                print("Name:", name_val)
+                print("File:", file_val)
+                print("Cross Encoder Score:", ce_score)
+                print("RRF Score:", rrf_score)
+                print("Exact Match:", exact_match_flag)
+
+            print("===========================================\n")
+            return reranked_results
+
+        print(f"\nReranked Results : {len(reranked_results)}")
 
         if reranked_results:
+            print("\nFirst Reranked Result:")
+            print(reranked_results[0])
 
-            print(
-                "\nFirst Reranked Result:"
-            )
+        # ==============================================================
+        # STEP 4 : CONTEXT OPTIMIZATION
+        # ==============================================================
 
-            print(
-                reranked_results[0]
-            )
-
-
-                    # -----------------------------------------
-        # Step 4 : Context Optimization
-        # -----------------------------------------
-
-        optimized_context = (
-            self._context_optimizer.optimize(
-                reranked_results
-            )
+        optimized_context = self._context_optimizer.optimize(
+            chunks=reranked_results,
+            query=question,
         )
 
-        print(
-            "\n========== OPTIMIZED CONTEXT DEBUG =========="
-        )
-
-        print(
-            "Optimized chunk count:",
-            len(optimized_context),
-        )
+        print("\n========== OPTIMIZED CONTEXT DEBUG ==========")
+        print("Optimized chunk count:", len(optimized_context))
 
         total_code_chars = 0
 
-        for i, chunk in enumerate(
-            optimized_context,
-            start=1,
-        ):
-
-            code = self._get_metadata_value(
-                chunk,
-                "code",
-                "",
-            )
-
+        for i, chunk in enumerate(optimized_context, start=1):
+            code = self._get_metadata_value(chunk, "code", "")
+            chunk_name = self._get_metadata_value(chunk, "name", "")
             print(
-                f"Chunk {i}:",
-                "name=",
-                self._get_metadata_value(
-                    chunk,
-                    "name",
-                    "",
-                ),
-                "| code length=",
-                len(code),
+                f"Chunk {i}: name= {chunk_name} | code length= {len(code)}"
             )
-
             total_code_chars += len(code)
 
-        print(
-            "TOTAL CODE CHARACTERS:",
-            total_code_chars,
-        )
+        print("TOTAL CODE CHARACTERS:", total_code_chars)
+        print("=============================================\n")
 
-        print(
-            "=============================================\n"
-        )
-
-        # -----------------------------------------
-        # Step 4A : Preserve Exact Match
-        # -----------------------------------------
-
+        # Preserve exact entity after optimization
         if exact_chunk_id:
-
-            optimized_context = (
-                self._move_exact_match_to_front(
-                    optimized_context,
-                    exact_chunk_id,
-                )
+            optimized_context = self._ensure_exact_entity(
+                optimized_context,
+                exact_match,
+                exact_chunk_id,
+            )
+            optimized_context = self._mark_exact_entity(
+                optimized_context,
+                entity_name,
+            )
+            optimized_context = self._move_exact_match_to_front(
+                optimized_context,
+                exact_chunk_id,
             )
 
-        print(
-            f"\nOptimized Chunks : "
-            f"{len(optimized_context)}"
-        )
+        print(f"\nOptimized Chunks : {len(optimized_context)}")
 
-        # -----------------------------------------
-        # Step 5 : Build Structured Context
-        # -----------------------------------------
+        # ==============================================================
+        # STEP 5 : BUILD STRUCTURED CONTEXT
+        # ==============================================================
 
         sections = []
 
-        for index, chunk in enumerate(
-            optimized_context,
-            start=1,
-        ):
-
-            file_path = self._get_metadata_value(
-                chunk,
-                "file_path",
-                "Unknown",
-            )
-
-            chunk_type = self._get_metadata_value(
-                chunk,
-                "type",
-                "Unknown",
-            )
-
-            name = self._get_metadata_value(
-                chunk,
-                "name",
-                "Unknown",
-            )
-
-            language = self._get_metadata_value(
-                chunk,
-                "language",
-                "Unknown",
-            )
-
-            start_line = self._get_metadata_value(
-                chunk,
-                "start_line",
-                "?",
-            )
-
-            end_line = self._get_metadata_value(
-                chunk,
-                "end_line",
-                "?",
-            )
-
-            class_name = self._get_metadata_value(
-                chunk,
-                "class_name",
-                None,
-            )
-
-            # At this point chunks should be dictionaries
-            # because RRF converts Documents to dictionaries.
-
-            code = self._get_metadata_value(
-                chunk,
-                "code",
-                "",
-            )
+        for index, chunk in enumerate(optimized_context, start=1):
+            file_path = self._get_metadata_value(chunk, "file_path", "Unknown")
+            chunk_type = self._get_metadata_value(chunk, "type", "Unknown")
+            name = self._get_metadata_value(chunk, "name", "Unknown")
+            language = self._get_metadata_value(chunk, "language", "Unknown")
+            start_line = self._get_metadata_value(chunk, "start_line", "?")
+            end_line = self._get_metadata_value(chunk, "end_line", "?")
+            class_name = self._get_metadata_value(chunk, "class_name", None)
+            code = self._get_metadata_value(chunk, "code", "")
 
             section = f"""
 File:
@@ -582,38 +731,19 @@ Lines:
 Code:
 {code}
 """
+            sections.append(section)
 
-            sections.append(
-                section
-            )
-
-        # -----------------------------------------
-        # Step 6 : Final Context
-        # -----------------------------------------
+        # ==============================================================
+        # STEP 6 : FINAL CONTEXT
+        # ==============================================================
 
         if sections:
-
-            context = "\n".join(
-                sections
-            )
-
+            context = "\n".join(sections)
         else:
+            context = "No relevant repository context was found."
 
-            context = (
-                "No relevant repository context "
-                "was found."
-            )
-
-        print(
-            "\n========== FINAL RETRIEVAL CONTEXT =========="
-        )
-
-        print(
-            context[:5000]
-        )
-
-        print(
-            "=============================================\n"
-        )
+        print("\n========== FINAL RETRIEVAL CONTEXT ==========")
+        print(context[:5000])
+        print("=============================================\n")
 
         return context

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 
 logger = logging.getLogger(__name__)
@@ -16,21 +16,19 @@ class ContextOptimizer:
     - Remove duplicate chunks.
     - Keep the highest scoring duplicate.
     - Remove invalid chunks.
-    - Sort by retrieval score.
+    - Sort by retrieval relevance.
     - Prioritize exact identifier matches.
-    - Limit the number of chunks.
-    - Limit total context size.
+    - Select chunks within a token budget.
 
-    This class DOES NOT:
-    - Retrieve documents.
-    - Re-rank documents.
-    - Generate LLM prompts.
+    Token counting and budget configuration are injected so this
+    class remains independent of any LLM provider.
     """
 
     def __init__(
         self,
-        max_chunks: int = 2,
-        max_context_chars: int = 12000,
+        max_chunks: int,
+        context_token_budget: int,
+        token_counter: Callable[[str], int],
     ) -> None:
 
         if max_chunks <= 0:
@@ -38,13 +36,19 @@ class ContextOptimizer:
                 "max_chunks must be greater than zero."
             )
 
-        if max_context_chars <= 0:
+        if context_token_budget <= 0:
             raise ValueError(
-                "max_context_chars must be greater than zero."
+                "context_token_budget must be greater than zero."
+            )
+
+        if not callable(token_counter):
+            raise TypeError(
+                "token_counter must be callable."
             )
 
         self._max_chunks = max_chunks
-        self._max_context_chars = max_context_chars
+        self._context_token_budget = context_token_budget
+        self._token_counter = token_counter
 
     # ------------------------------------------------------------------
     # Public API
@@ -56,57 +60,24 @@ class ContextOptimizer:
     ) -> List[Dict]:
 
         if not chunks:
-            logger.info("No chunks to optimize.")
+            logger.info(
+                "No chunks to optimize."
+            )
             return []
 
-        print("\n========== OPTIMIZER INPUT ==========")
-        print("TYPE:", type(chunks))
-        print("COUNT:", len(chunks))
+        print(
+            "\n========== OPTIMIZER INPUT =========="
+        )
 
-        for i, chunk in enumerate(chunks[:3]):
+        print(
+            "TYPE:",
+            type(chunks),
+        )
 
-            print(f"\nCHUNK {i}")
-            print(
-                "TYPE:",
-                type(chunk),
-            )
-
-            print(
-                "KEYS:",
-                list(chunk.keys())
-                if isinstance(chunk, dict)
-                else "NOT DICT",
-            )
-
-            print(
-                "CHUNK ID:",
-                chunk.get("chunk_id")
-                if isinstance(chunk, dict)
-                else None,
-            )
-
-            print(
-                "HAS CODE:",
-                "code" in chunk
-                if isinstance(chunk, dict)
-                else False,
-            )
-
-            print(
-                "CODE TYPE:",
-                type(chunk.get("code"))
-                if isinstance(chunk, dict)
-                else None,
-            )
-
-            print(
-                "CODE LENGTH:",
-                len(chunk.get("code", ""))
-                if isinstance(chunk, dict)
-                else 0,
-            )
-
-        print("=====================================\n")
+        print(
+            "COUNT:",
+            len(chunks),
+        )
 
         # --------------------------------------------------------------
         # Remove duplicates
@@ -122,7 +93,7 @@ class ContextOptimizer:
         )
 
         # --------------------------------------------------------------
-        # Sort
+        # Sort by relevance
         # --------------------------------------------------------------
 
         optimized_chunks = sorted(
@@ -152,23 +123,7 @@ class ContextOptimizer:
 
         for chunk in optimized_chunks:
 
-            valid = self._is_valid(chunk)
-
-            print(
-                "VALID:",
-                valid,
-                "| chunk_id:",
-                chunk.get("chunk_id"),
-                "| code length:",
-                len(
-                    chunk.get(
-                        "code",
-                        "",
-                    )
-                ),
-            )
-
-            if valid:
+            if self._is_valid(chunk):
                 valid_chunks.append(chunk)
 
         optimized_chunks = valid_chunks
@@ -179,22 +134,37 @@ class ContextOptimizer:
         )
 
         # --------------------------------------------------------------
-        # Limit number of chunks
-        # --------------------------------------------------------------
-
-        optimized_chunks = optimized_chunks[
-            : self._max_chunks
-        ]
-
-        # --------------------------------------------------------------
-        # Context character budget
+        # Token-aware selection
         # --------------------------------------------------------------
 
         final_chunks: List[Dict] = []
 
-        total_chars = 0
+        used_tokens = 0
 
-        for chunk in optimized_chunks:
+        exact_chunks = [
+            chunk
+            for chunk in optimized_chunks
+            if chunk.get(
+                "is_exact_identifier_match",
+                False,
+            )
+        ]
+
+        normal_chunks = [
+            chunk
+            for chunk in optimized_chunks
+            if not chunk.get(
+                "is_exact_identifier_match",
+                False,
+            )
+        ]
+
+        candidates = exact_chunks + normal_chunks
+
+        for chunk in candidates:
+
+            if len(final_chunks) >= self._max_chunks:
+                break
 
             code = chunk.get(
                 "code",
@@ -204,23 +174,35 @@ class ContextOptimizer:
             if not code:
                 continue
 
+            chunk_tokens = self._token_count(
+                code
+            )
+
+            # ----------------------------------------------------------
+            # Skip chunks that do not fit.
+            #
+            # We do NOT truncate code because retrieved repository
+            # code must remain intact.
+            # ----------------------------------------------------------
+
             if (
-                total_chars + len(code)
-                > self._max_context_chars
+                used_tokens + chunk_tokens
+                > self._context_token_budget
             ):
 
-                logger.info(
-                    "Context character limit reached."
+                logger.debug(
+                    "Skipping chunk %s: token budget exceeded.",
+                    chunk.get("chunk_id"),
                 )
 
-                break
+                continue
 
             final_chunks.append(chunk)
 
-            total_chars += len(code)
+            used_tokens += chunk_tokens
 
         # --------------------------------------------------------------
-        # Final diagnostics
+        # Diagnostics
         # --------------------------------------------------------------
 
         print(
@@ -248,44 +230,46 @@ class ContextOptimizer:
         )
 
         print(
-            "Final context characters:",
-            total_chars,
+            "Context token budget:",
+            self._context_token_budget,
+        )
+
+        print(
+            "Context tokens used:",
+            used_tokens,
+        )
+
+        print(
+            "Remaining tokens:",
+            self._context_token_budget - used_tokens,
         )
 
         if final_chunks:
 
             print(
-                "\nFINAL CHUNK:"
+                "\nSelected chunks:"
             )
 
-            print(
-                "Name:",
-                final_chunks[0].get(
-                    "name"
-                ),
-            )
+            for index, chunk in enumerate(
+                final_chunks,
+                start=1,
+            ):
 
-            print(
-                "File:",
-                final_chunks[0].get(
-                    "file_path"
-                ),
-            )
-
-            print(
-                "Chunk ID:",
-                final_chunks[0].get(
-                    "chunk_id"
-                ),
-            )
-
-            print(
-                "Exact Identifier Match:",
-                final_chunks[0].get(
-                    "is_exact_identifier_match",
-                    False,
-                ),
-            )
+                print(
+                    f"{index}.",
+                    chunk.get("name"),
+                    "|",
+                    chunk.get("file_path"),
+                    "| tokens:",
+                    self._token_count(
+                        chunk.get("code", "")
+                    ),
+                    "| exact:",
+                    chunk.get(
+                        "is_exact_identifier_match",
+                        False,
+                    ),
+                )
 
         print(
             "=======================================\n"
@@ -294,7 +278,21 @@ class ContextOptimizer:
         return final_chunks
 
     # ------------------------------------------------------------------
-    # Internal Helpers
+    # Token Counting
+    # ------------------------------------------------------------------
+
+    def _token_count(
+        self,
+        text: str,
+    ) -> int:
+
+        if not text:
+            return 0
+
+        return self._token_counter(text)
+
+    # ------------------------------------------------------------------
+    # Scoring
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -302,12 +300,24 @@ class ContextOptimizer:
         chunk: Dict,
     ) -> float:
 
-        return (
-            chunk.get("cross_encoder_score")
-            or chunk.get("rrf_score")
-            or chunk.get("bm25_score")
-            or 0.0
+        return max(
+            chunk.get(
+                "cross_encoder_score",
+                0.0,
+            ),
+            chunk.get(
+                "rrf_score",
+                0.0,
+            ),
+            chunk.get(
+                "bm25_score",
+                0.0,
+            ),
         )
+
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _is_valid(
@@ -315,7 +325,10 @@ class ContextOptimizer:
     ) -> bool:
 
         return (
-            isinstance(chunk, dict)
+            isinstance(
+                chunk,
+                dict,
+            )
             and "chunk_id" in chunk
             and "code" in chunk
             and isinstance(
@@ -326,6 +339,10 @@ class ContextOptimizer:
                 chunk["code"].strip()
             )
         )
+
+    # ------------------------------------------------------------------
+    # Deduplication
+    # ------------------------------------------------------------------
 
     def _remove_duplicates(
         self,

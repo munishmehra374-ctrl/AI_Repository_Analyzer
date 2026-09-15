@@ -83,20 +83,48 @@ class GraphBuilder:
         # ALL FUNCTIONS ARE IN THE GRAPH
         # =================================================
 
+        print(
+            "\n>>> STARTING RELATIONSHIP BUILD"
+        )
+
         graph = self.relationship_builder.build(
             graph
+        )
+
+        print(
+            ">>> RELATIONSHIP BUILD COMPLETE"
         )
 
         # =================================================
         # Semantic relationships
         # =================================================
 
+        print(
+            "\n>>> STARTING DEPENDENCY ANALYSIS"
+        )
+
         graph = self.dependency_analyzer.analyze(
             graph
         )
 
+        print(
+            ">>> DEPENDENCY ANALYSIS COMPLETE"
+        )
+
+        print(
+            "\n>>> STARTING IMPORT ANALYSIS"
+        )
+
         graph = self.import_analyzer.analyze(
             graph
+        )
+
+        print(
+            ">>> IMPORT ANALYSIS COMPLETE"
+        )
+
+        print(
+            "\n>>> STARTING INHERITANCE ANALYSIS"
         )
 
         graph = self.inheritance_analyzer.analyze(
@@ -104,7 +132,15 @@ class GraphBuilder:
         )
 
         print(
-            "=============================================="
+            ">>> INHERITANCE ANALYSIS COMPLETE"
+        )
+
+        # =================================================
+        # Final Graph Statistics
+        # =================================================
+
+        print(
+            "\n=============================================="
         )
 
         print(
@@ -218,8 +254,9 @@ class GraphBuilder:
             if not statement:
                 continue
 
+            import_key = f"{file_path}::{statement}"
             graph.imports[
-                statement
+                import_key
             ] = ImportNode(
                 statement=statement,
                 module=imported_module.get(
@@ -375,6 +412,7 @@ class GraphBuilder:
                 method=route["method"],
                 path=route["path"],
                 handler=route["handler"],
+                file_path=file_path,
             )
 
         # =================================================

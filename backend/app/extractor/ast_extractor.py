@@ -86,6 +86,9 @@ class SemanticChunker:
         source_code: str,
     ) -> dict:
 
+        print("🔥 AST EXTRACTOR CALLED 🔥")
+
+
         result = {
 
             "imports": [],
@@ -205,6 +208,11 @@ class SemanticChunker:
             "async_function_definition",
 
         ):
+
+            print(
+                "🔥 FUNCTION DEFINITION FOUND:",
+                node.type,
+            )
 
             function = self.function_extractor.extract(
 

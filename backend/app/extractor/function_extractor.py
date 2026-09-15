@@ -10,18 +10,6 @@ from app.extractor.dependency_extractor import DependencyExtractor
 class FunctionExtractor:
     """
     Extracts Python function information.
-
-    Extracted Information
-    ---------------------
-    - Qualified Name
-    - Function Name
-    - Parameters
-    - Return Type
-    - Decorators
-    - Function Calls
-    - Function Properties
-    - Source Code
-    - Line Numbers
     """
 
     def __init__(self):
@@ -31,6 +19,32 @@ class FunctionExtractor:
         self.call_extractor = CallExtractor()
 
         self.dependency_extractor = DependencyExtractor()
+
+    # ==========================================================
+    # Source Helper
+    # ==========================================================
+
+    @staticmethod
+    def _get_source_text(
+        node: Node,
+        source_code: str,
+    ) -> str:
+
+        source_bytes = source_code.encode(
+            "utf-8"
+        )
+
+        return source_bytes[
+            node.start_byte:
+            node.end_byte
+        ].decode(
+            "utf-8",
+            errors="replace",
+        )
+
+    # ==========================================================
+    # Extract Function
+    # ==========================================================
 
     def extract(
         self,
@@ -51,95 +65,138 @@ class FunctionExtractor:
 
         return_type = None
 
-        # ---------------------------------------------
+        # ------------------------------------------------------
         # Function Type
-        # ---------------------------------------------
+        # ------------------------------------------------------
 
         is_async = (
-            node.type == "async_function_definition"
+            node.type
+            == "async_function_definition"
         )
 
-        # ---------------------------------------------
+        # ------------------------------------------------------
         # Traverse Function Children
-        # ---------------------------------------------
+        # ------------------------------------------------------
 
         for child in node.children:
 
-            # -----------------------------------------
+            # --------------------------------------------------
             # Function Name
-            # -----------------------------------------
+            # --------------------------------------------------
 
             if child.type == "identifier":
 
-                function_name = source_code[
-                    child.start_byte:
-                    child.end_byte
-                ]
+                function_name = (
+                    self._get_source_text(
+                        child,
+                        source_code,
+                    )
+                )
 
-            # -----------------------------------------
+            # --------------------------------------------------
             # Parameters
-            # -----------------------------------------
+            # --------------------------------------------------
 
             elif child.type == "parameters":
 
-                parameters = self.parameter_extractor.extract(
-                    child,
-                    source_code,
+                parameters = (
+                    self.parameter_extractor.extract(
+                        child,
+                        source_code,
+                    )
                 )
 
-            # -----------------------------------------
+            # --------------------------------------------------
             # Return Type
-            # -----------------------------------------
+            # --------------------------------------------------
 
             elif child.type == "type":
 
-                return_type = source_code[
-                    child.start_byte:
-                    child.end_byte
-                ]
+                return_type = (
+                    self._get_source_text(
+                        child,
+                        source_code,
+                    )
+                )
 
-            # -----------------------------------------
+            # --------------------------------------------------
             # Decorators
-            # -----------------------------------------
+            # --------------------------------------------------
 
             elif child.type == "decorator":
 
                 decorators.append(
-
-                    source_code[
-                        child.start_byte:
-                        child.end_byte
-                    ]
-
+                    self._get_source_text(
+                        child,
+                        source_code,
+                    )
                 )
 
-            # -----------------------------------------
+            # --------------------------------------------------
             # Function Body
-            # -----------------------------------------
+            # --------------------------------------------------
 
             elif child.type == "block":
 
-                calls = self.call_extractor.extract(
-                    child,
-                    source_code,
+                calls = (
+                    self.call_extractor.extract(
+                        child,
+                        source_code,
+                    )
                 )
 
                 print(
                     "FUNCTION:",
-                     function_name,
-                     "CALLS:",
-                     calls,
+                    function_name,
+                    "CALLS:",
+                    calls,
                 )
 
-                dependencies = self.dependency_extractor.extract(
-                    child,
-                    source_code,
+        # ------------------------------------------------------
+        # Dependencies
+        #
+        # IMPORTANT:
+        # Pass the COMPLETE function node.
+        #
+        # This allows DependencyExtractor to inspect:
+        #
+        # def __init__(
+        #     self,
+        #     retriever: RetrievalService,
+        # ):
+        #
+        # as well as:
+        #
+        # self.db = Database()
+        # ------------------------------------------------------
 
-                )
+    # ------------------------------------------------------
+# Dependencies
+# ------------------------------------------------------
 
-        # ---------------------------------------------
+        print(
+            "🔥 ABOUT TO EXTRACT DEPENDENCIES:",
+            function_name,
+            "CLASS:",
+            current_class,
+        )
+
+        dependencies = (
+            self.dependency_extractor.extract(
+                node,
+                source_code,
+            )
+        )
+
+        print(
+            "🔥 DEPENDENCIES RESULT:",
+            function_name,
+            dependencies,
+        )
+
+        # ------------------------------------------------------
         # Qualified Name
-        # ---------------------------------------------
+        # ------------------------------------------------------
 
         qualified_name = (
 
@@ -151,11 +208,13 @@ class FunctionExtractor:
 
         )
 
-        # ---------------------------------------------
+        # ------------------------------------------------------
         # Function Properties
-        # ---------------------------------------------
+        # ------------------------------------------------------
 
-        is_method = current_class is not None
+        is_method = (
+            current_class is not None
+        )
 
         visibility = (
             "private"
@@ -173,9 +232,9 @@ class FunctionExtractor:
             for decorator in decorators
         )
 
-        # ---------------------------------------------
+        # ------------------------------------------------------
         # Return
-        # ---------------------------------------------
+        # ------------------------------------------------------
 
         return {
 
@@ -184,10 +243,6 @@ class FunctionExtractor:
             "name": function_name,
 
             "class_name": current_class,
-
-            # ---------------------------------
-            # Function Properties
-            # ---------------------------------
 
             "is_method": is_method,
 
@@ -199,17 +254,9 @@ class FunctionExtractor:
 
             "is_classmethod": is_classmethod,
 
-            # ---------------------------------
-            # Signature
-            # ---------------------------------
-
             "parameters": parameters,
 
             "returns": return_type,
-
-            # ---------------------------------
-            # Behavior
-            # ---------------------------------
 
             "decorators": decorators,
 
@@ -217,20 +264,18 @@ class FunctionExtractor:
 
             "dependencies": dependencies,
 
-            # ---------------------------------
-            # Source Location
-            # ---------------------------------
+            "start_line": (
+                node.start_point[0] + 1
+            ),
 
-            "start_line": node.start_point[0] + 1,
+            "end_line": (
+                node.end_point[0] + 1
+            ),
 
-            "end_line": node.end_point[0] + 1,
-
-            # ---------------------------------
-            # Source Code
-            # ---------------------------------
-
-            "code": source_code[
-                node.start_byte:
-                node.end_byte
-            ],
+            "code": (
+                self._get_source_text(
+                    node,
+                    source_code,
+                )
+            ),
         }

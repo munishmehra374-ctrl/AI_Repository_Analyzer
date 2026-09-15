@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import logging
-import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from app.retrieval.bm25_retriever import BM25Retriever
 from app.vectorstore.retriever import RepositoryRetriever
@@ -16,17 +15,9 @@ class HybridRetriever:
     """
     Executes Vector Search and BM25 Search.
 
-    Responsibilities
-    ----------------
-    - Execute vector search and BM25 search.
-    - Detect explicit repository identifiers.
-    - Find exact identifier matches.
-    - Mark exact identifier matches.
-
-    This class DOES NOT:
-    - Merge results using RRF.
-    - Perform cross-encoder re-ranking.
-    - Optimize context.
+    Existing retrieval logic is preserved.
+    Repository ID is only used to isolate retrieval
+    to the selected repository.
     """
 
     def __init__(
@@ -45,13 +36,17 @@ class HybridRetriever:
     def retrieve(
         self,
         query: str,
-        vector_k: int = 10,
-        bm25_k: int = 10,
+        vector_k: int = 20,
+        bm25_k: int = 20,
+        entity_name: str | None = None,
+        repository_id: str | None = None,
     ) -> Dict[str, List]:
 
-        if not query.strip():
+        if not query or not query.strip():
 
-            logger.warning("Empty query received.")
+            logger.warning(
+                "Empty query received."
+            )
 
             return {
                 "vector_results": [],
@@ -59,24 +54,45 @@ class HybridRetriever:
             }
 
         if vector_k <= 0:
+
             raise ValueError(
                 "vector_k must be greater than zero."
             )
 
         if bm25_k <= 0:
+
             raise ValueError(
                 "bm25_k must be greater than zero."
             )
 
-        identifier = self._extract_identifier(query)
+        if not repository_id:
 
-        print("\n========== HYBRID RETRIEVAL ==========")
-        print("Query:", query)
-        print("Detected Identifier:", identifier)
+            raise ValueError(
+                "repository_id is required for hybrid retrieval."
+            )
 
-        # ==========================================================
-        # Normal Vector + BM25 Retrieval
-        # ==========================================================
+        print(
+            "\n========== HYBRID RETRIEVAL =========="
+        )
+
+        print(
+            "Query:",
+            query,
+        )
+
+        print(
+            "Repository:",
+            repository_id,
+        )
+
+        print(
+            "Resolved Entity:",
+            entity_name,
+        )
+
+        # ----------------------------------------------------------
+        # Run Vector Search and BM25 Search concurrently
+        # ----------------------------------------------------------
 
         with ThreadPoolExecutor(
             max_workers=2
@@ -86,102 +102,74 @@ class HybridRetriever:
                 self._vector_retriever.retrieve,
                 query=query,
                 top_k=vector_k,
+                repository_id=repository_id,
             )
 
             bm25_future = executor.submit(
                 self._bm25_retriever.retrieve,
                 query=query,
                 top_k=bm25_k,
+                repository_id=repository_id,
             )
 
-            vector_results = vector_future.result()
-            bm25_results = bm25_future.result()
-
-        # ==========================================================
-        # Exact Identifier Search
-        # ==========================================================
-
-        if identifier:
-
-            print(
-                "\n========== EXACT IDENTIFIER SEARCH =========="
+            vector_results = (
+                vector_future.result()
             )
 
-            print(
-                "Searching BM25 for:",
-                identifier,
+            bm25_results = (
+                bm25_future.result()
             )
 
-            exact_results = self._bm25_retriever.retrieve(
-                query=identifier,
-                top_k=10,
-            )
+            if entity_name:
 
-            exact_match = self._find_exact_identifier(
-                exact_results,
-                identifier,
-            )
-
-            if exact_match is not None:
-
-                exact_match = exact_match.copy()
-
-                exact_match[
-                    "is_exact_identifier_match"
-                ] = True
-
-                exact_chunk_id = exact_match.get(
-                    "chunk_id"
+                exact_entity = (
+                    self._bm25_retriever.retrieve_exact_entity(
+                        entity_name,
+                        repository_id=repository_id,
+                    )
                 )
 
-                print(
-                    "\nEXACT IDENTIFIER MATCH FOUND:",
-                    identifier,
+                if exact_entity is not None:
+
+                    existing_ids = {
+                        result.get("chunk_id")
+                        for result in bm25_results
+                    }
+
+                    exact_id = exact_entity.get(
+                        "chunk_id"
+                    )
+
+                    if exact_id not in existing_ids:
+
+                        bm25_results.insert(
+                            0,
+                            exact_entity
+                        )
+
+        # ----------------------------------------------------------
+        # Entity-aware prioritization
+        # ----------------------------------------------------------
+
+        if entity_name:
+
+            vector_results = (
+                self._prioritize_entity(
+                    vector_results,
+                    entity_name,
                 )
-
-                print(
-                    "File:",
-                    exact_match.get(
-                        "file_path",
-                        "",
-                    ),
-                )
-
-                print(
-                    "Name:",
-                    exact_match.get(
-                        "name",
-                        "",
-                    ),
-                )
-
-                # Put exact result first.
-                bm25_results = [
-                    exact_match
-                ] + [
-                    chunk
-                    for chunk in bm25_results
-                    if self._get_chunk_id(chunk)
-                    != exact_chunk_id
-                ]
-
-            else:
-
-                print(
-                    "\nEXACT IDENTIFIER MATCH NOT FOUND:",
-                    identifier,
-                )
-
-        # ==========================================================
-        # Mark Exact Matches Already Present In Vector Results
-        # ==========================================================
-
-        if identifier:
-
-            vector_results = self._mark_exact_matches(
-                vector_results,
-                identifier,
             )
+
+            bm25_results = (
+                self._prioritize_entity(
+                    bm25_results,
+                    entity_name,
+                )
+            )
+
+        # ----------------------------------------------------------
+        # Debug
+        # ----------------------------------------------------------
 
         print(
             "\nVector Results:",
@@ -193,20 +181,47 @@ class HybridRetriever:
             len(bm25_results),
         )
 
-        if bm25_results:
+        if entity_name:
 
-            print(
-                "\n===== FIRST BM25 RESULT ====="
-            )
-
-            print(
-                self._debug_result(
-                    bm25_results[0]
+            exact_vector = (
+                self._find_exact_entity(
+                    vector_results,
+                    entity_name,
                 )
             )
 
+            exact_bm25 = (
+                self._find_exact_entity(
+                    bm25_results,
+                    entity_name,
+                )
+            )
+
+            print(
+                "\n========== ENTITY PRIORITIZATION =========="
+            )
+
+            print(
+                "Entity:",
+                entity_name,
+            )
+
+            print(
+                "Found in Vector:",
+                exact_vector is not None,
+            )
+
+            print(
+                "Found in BM25:",
+                exact_bm25 is not None,
+            )
+
+            print(
+                "============================================\n"
+            )
+
         print(
-            "=====================================\n"
+            "\n=====================================\n"
         )
 
         return {
@@ -215,230 +230,132 @@ class HybridRetriever:
         }
 
     # ==============================================================
-    # Identifier Detection
+    # Entity Helpers
     # ==============================================================
 
     @staticmethod
-    def _extract_identifier(
-        query: str,
-    ) -> Optional[str]:
-
-        match = re.search(
-            r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(",
-            query,
-        )
-
-        if match:
-            return match.group(1)
-
-        match = re.search(
-            r"`([A-Za-z_][A-Za-z0-9_]*)`",
-            query,
-        )
-
-        if match:
-            return match.group(1)
-
-        return None
-
-    # ==============================================================
-    # Exact Identifier Search
-    # ==============================================================
-
-    @staticmethod
-    def _find_exact_identifier(
-        results: List,
-        identifier: str,
-    ) -> Optional[Dict]:
-
-        identifier_lower = identifier.lower()
-
-        for result in results:
-
-            if hasattr(result, "metadata"):
-
-                metadata = result.metadata
-
-                name = metadata.get(
-                    "name",
-                    "",
-                )
-
-                qualified_name = metadata.get(
-                    "qualified_name",
-                    "",
-                )
-
-                chunk = {
-                    "chunk_id": metadata.get(
-                        "chunk_id"
-                    ),
-                    "code": result.page_content,
-                    **metadata,
-                }
-
-            else:
-
-                chunk = result
-
-                name = chunk.get(
-                    "name",
-                    "",
-                )
-
-                qualified_name = chunk.get(
-                    "qualified_name",
-                    "",
-                )
-
-            if (
-                str(name).lower()
-                == identifier_lower
-            ):
-
-                return chunk
-
-            if (
-                str(qualified_name).lower()
-                == identifier_lower
-            ):
-
-                return chunk
-
-        return None
-
-    # ==============================================================
-    # Mark Exact Matches
-    # ==============================================================
-
-    @staticmethod
-    def _mark_exact_matches(
-        results: List,
-        identifier: str,
-    ) -> List:
-
-        identifier_lower = identifier.lower()
-
-        updated = []
-
-        for result in results:
-
-            if hasattr(result, "metadata"):
-
-                metadata = result.metadata
-
-                name = metadata.get(
-                    "name",
-                    "",
-                )
-
-                qualified_name = metadata.get(
-                    "qualified_name",
-                    "",
-                )
-
-                if (
-                    str(name).lower()
-                    == identifier_lower
-                    or
-                    str(qualified_name).lower()
-                    == identifier_lower
-                ):
-
-                    metadata[
-                        "is_exact_identifier_match"
-                    ] = True
-
-                updated.append(result)
-
-            else:
-
-                result = result.copy()
-
-                name = result.get(
-                    "name",
-                    "",
-                )
-
-                qualified_name = result.get(
-                    "qualified_name",
-                    "",
-                )
-
-                if (
-                    str(name).lower()
-                    == identifier_lower
-                    or
-                    str(qualified_name).lower()
-                    == identifier_lower
-                ):
-
-                    result[
-                        "is_exact_identifier_match"
-                    ] = True
-
-                updated.append(result)
-
-        return updated
-
-    # ==============================================================
-    # Helpers
-    # ==============================================================
-
-    @staticmethod
-    def _get_chunk_id(
+    def _get_metadata_value(
         result,
+        key: str,
+        default="",
     ):
 
-        if hasattr(result, "metadata"):
+        if hasattr(
+            result,
+            "metadata",
+        ):
 
             return result.metadata.get(
-                "chunk_id"
+                key,
+                default,
             )
 
-        return result.get(
-            "chunk_id"
+        if isinstance(
+            result,
+            dict,
+        ):
+
+            return result.get(
+                key,
+                default,
+            )
+
+        return default
+
+    @classmethod
+    def _find_exact_entity(
+        cls,
+        results: List,
+        entity_name: str,
+    ):
+
+        target = (
+            entity_name
+            .strip()
+            .lower()
         )
 
-    @staticmethod
-    def _debug_result(
-        result,
-    ) -> Dict:
+        for result in results:
 
-        if hasattr(result, "metadata"):
+            name = str(
+                cls._get_metadata_value(
+                    result,
+                    "name",
+                    "",
+                )
+            ).strip().lower()
 
-            return {
-                "chunk_id": result.metadata.get(
-                    "chunk_id"
-                ),
-                "name": result.metadata.get(
-                    "name"
-                ),
-                "qualified_name": result.metadata.get(
-                    "qualified_name"
-                ),
-                "file_path": result.metadata.get(
-                    "file_path"
-                ),
-                "type": result.metadata.get(
-                    "type"
-                ),
-            }
+            qualified_name = str(
+                cls._get_metadata_value(
+                    result,
+                    "qualified_name",
+                    "",
+                )
+            ).strip().lower()
 
-        return {
-            "chunk_id": result.get(
-                "chunk_id"
-            ),
-            "name": result.get(
-                "name"
-            ),
-            "qualified_name": result.get(
-                "qualified_name"
-            ),
-            "file_path": result.get(
-                "file_path"
-            ),
-            "type": result.get(
-                "type"
-            ),
-        }
+            if (
+                name == target
+                or qualified_name == target
+            ):
+
+                return result
+
+        return None
+
+    @classmethod
+    def _prioritize_entity(
+        cls,
+        results: List,
+        entity_name: str,
+    ) -> List:
+
+        if not results or not entity_name:
+
+            return results
+
+        target = (
+            entity_name
+            .strip()
+            .lower()
+        )
+
+        exact_matches = []
+        remaining = []
+
+        for result in results:
+
+            name = str(
+                cls._get_metadata_value(
+                    result,
+                    "name",
+                    "",
+                )
+            ).strip().lower()
+
+            qualified_name = str(
+                cls._get_metadata_value(
+                    result,
+                    "qualified_name",
+                    "",
+                )
+            ).strip().lower()
+
+            if (
+                name == target
+                or qualified_name == target
+            ):
+
+                exact_matches.append(
+                    result
+                )
+
+            else:
+
+                remaining.append(
+                    result
+                )
+
+        return (
+            exact_matches
+            + remaining
+        )

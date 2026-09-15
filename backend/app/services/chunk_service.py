@@ -7,6 +7,8 @@ from app.chunker.semantic_chunker import SemanticChunker
 
 class ChunkService:
 
+    # Incremental indexing test
+
     def __init__(self):
 
         self.parser = TreeSitterParser()
@@ -14,6 +16,9 @@ class ChunkService:
         self.chunker = SemanticChunker()
 
     def generate_chunks(self, file_path: str):
+
+        print("🔥🔥🔥 NEW CHUNK SERVICE IS RUNNING 🔥🔥🔥")
+
 
         path = Path(file_path)
 
@@ -36,12 +41,24 @@ class ChunkService:
         print("Extracted data:")
         print(type(extracted_data))
         print(extracted_data)
-
+            
         chunks = self.chunker.chunk(
             extracted_data=extracted_data,
             file_path=file_path,
             language="python"
         )
+
+        for chunk in chunks:
+            if chunk.get("name") == "create_workflow":
+                print("\n====================================")
+                print("FOUND create_workflow")
+                print("File:", chunk.get("file_path"))
+                print("Type:", chunk.get("type"))
+                print("Name:", chunk.get("name"))
+                print("Qualified:", chunk.get("qualified_name"))
+                print("Code:")
+                print(chunk.get("code"))
+                print("====================================\n")
 
         print(f"Chunks generated: {len(chunks)}")
 

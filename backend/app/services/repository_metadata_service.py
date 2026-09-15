@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 
 from app.metadata.repository_metadata import RepositoryMetadata
-
 from app.metadata.statistics_analyzer import StatisticsAnalyzer
 from app.metadata.module_analyzer import ModuleAnalyzer
 from app.metadata.technology_detector import TechnologyDetector
@@ -31,6 +30,11 @@ class RepositoryMetadataService:
         self.module_analyzer = ModuleAnalyzer()
 
         self.technology_detector = TechnologyDetector()
+
+    # =====================================================
+    # Update Metadata For One File
+    # =====================================================
+
     def update(
         self,
         extracted_data: dict,
@@ -149,21 +153,73 @@ class RepositoryMetadataService:
         )
 
     # =====================================================
+    # Build Metadata From ALL Extracted Files
+    # =====================================================
+
+    def build_from_extracted_data(
+        self,
+        extracted_files: list[dict],
+        repository_path: str,
+        language: str = "python",
+    ):
+        """
+        Rebuild repository metadata from the complete set
+        of extracted files.
+
+        This is important for incremental indexing:
+
+        - changed files are freshly extracted
+        - unchanged files are loaded from Redis
+        - metadata must be calculated from BOTH
+
+        This prevents the dashboard from showing only the
+        number of files changed during the latest indexing run.
+        """
+
+        # Start with a completely fresh metadata object.
+        self.repository = RepositoryMetadata()
+
+        for extracted_data in extracted_files:
+
+            file_path = extracted_data.get(
+                "file_path"
+            )
+
+            if not file_path:
+                continue
+
+            self.update(
+                extracted_data=extracted_data,
+                file_path=file_path,
+                repository_path=repository_path,
+                language=extracted_data.get(
+                    "language",
+                    language,
+                ),
+            )
+
+        return self.get_repository_profile()
+
+    # =====================================================
     # Repository Profile
     # =====================================================
 
     def get_repository_profile(self):
 
         return {
-
             "repository_name":
                 self.repository.repository_name,
 
             "repository_path":
                 self.repository.repository_path,
 
-            "statistics": {
+            "summary":
+                self.repository.summary,
 
+            "architecture":
+                self.repository.architecture,
+
+            "statistics": {
                 "files":
                     self.repository.total_files,
 
@@ -257,11 +313,8 @@ Modules
 -------
 {", ".join(profile["modules"]) or "None"}
 """
-    # =====================================================
-    # Architecture
-    # =====================================================
 
-        # =====================================================
+    # =====================================================
     # Architecture
     # =====================================================
 

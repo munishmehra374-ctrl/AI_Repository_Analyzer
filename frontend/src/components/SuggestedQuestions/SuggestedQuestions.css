@@ -1,34 +1,88 @@
-.suggestion-grid{
+/* =====================================================
+   SUGGESTION GRID
+   ===================================================== */
 
-    display:grid;
-    grid-template-columns:repeat(2,1fr);
-    gap:20px;
-    margin-bottom:40px;
+.suggestion-grid {
+    width: min(900px, 100%);
 
+    margin: 0 auto 28px;
+
+    display: grid;
+
+    grid-template-columns: repeat(2, 1fr);
+
+    gap: 14px;
+
+    flex-shrink: 0;
 }
 
-.suggestion-grid button{
 
-    background:#171f30;
+/* =====================================================
+   SUGGESTION BUTTON
+   ===================================================== */
 
-    border:1px solid #2d3f60;
+.suggestion-grid button {
+    min-height: 72px;
 
-    color:white;
+    padding: 16px 18px;
 
-    padding:22px;
+    background: #171f30;
 
-    border-radius:18px;
+    border: 1px solid #2d3f60;
 
-    cursor:pointer;
+    border-radius: 14px;
 
-    text-align:left;
+    color: white;
 
-    transition:.25s;
+    font-family: inherit;
 
+    font-size: 14px;
+
+    line-height: 1.5;
+
+    cursor: pointer;
+
+    text-align: left;
+
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        transform 0.2s ease;
 }
 
-.suggestion-grid button:hover{
 
-    border-color:#3b82f6;
+/* =====================================================
+   HOVER
+   ===================================================== */
 
+.suggestion-grid button:hover {
+    border-color: #3b82f6;
+
+    background: #1b263b;
+
+    transform: translateY(-1px);
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 700px) {
+
+    .suggestion-grid {
+        grid-template-columns: 1fr;
+
+        gap: 10px;
+
+        margin-bottom: 20px;
+    }
+
+    .suggestion-grid button {
+        min-height: 60px;
+
+        padding: 14px;
+
+        font-size: 14px;
+    }
 }

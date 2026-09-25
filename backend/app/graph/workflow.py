@@ -48,7 +48,8 @@ def create_workflow(
     # =========================================================
 
     planner = PlannerNode(
-        dependencies.llm_service
+        dependencies.llm_service,
+        entity_resolver=getattr(graph_tool, "entity_resolver", None),
     )
 
     # =========================================================

@@ -31,8 +31,10 @@ class PlannerNode:
     def __init__(
         self,
         llm_service: LLMService,
+        entity_resolver: Any = None,
     ):
         self.llm = llm_service
+        self.entity_resolver = entity_resolver
         self.settings = get_settings()
 
     def __call__(
@@ -40,13 +42,43 @@ class PlannerNode:
         state: GraphState,
     ):
 
+        question = state.get("question", "")
+
+        # ======================================================
+        # Symbol-Aware Pre-Resolution
+        # ======================================================
+        resolved_entity = None
+        if self.entity_resolver:
+            try:
+                resolved_entity = self.entity_resolver.resolve(question)
+            except Exception as e:
+                logger.warning("EntityResolver failed in PlannerNode: %s", e)
+                resolved_entity = None
+
+        symbol_hint = ""
+        if resolved_entity and resolved_entity.get("name"):
+            entity_name = resolved_entity["name"]
+            entity_type = resolved_entity.get("type", "entity")
+            symbol_hint = (
+                f"\n\n==============================================================\n"
+                f"DETECTED REPOSITORY SYMBOL:\n"
+                f"The question references '{entity_name}' (type: {entity_type}),\n"
+                f"which has been verified to exist in this repository's codebase.\n"
+                f"Treat this as a repository question (do NOT classify as 'general').\n"
+                f"Select appropriate repository tool(s) such as 'retrieval' or 'graph'.\n"
+                f"==============================================================\n"
+            )
+            print(
+                f"\n[SYMBOL-AWARE ROUTER] Verified repository {entity_type}: '{entity_name}'"
+            )
+
         prompt = PLANNER_PROMPT.format(
             repository_uploaded=state["repository_uploaded"],
             repository_indexed=state["repository_indexed"],
             repository_name=state["repository_name"],
             primary_language=state["primary_language"],
-            question=state["question"],
-        )
+            question=question,
+        ) + symbol_hint
 
         print("\n" + "=" * 80)
         print("PLANNER NODE")
@@ -285,6 +317,27 @@ Required JSON structure:
                 tools.append(
                     "retrieval"
                 )
+
+        # ======================================================
+        # Symbol-Aware Routing Guardrail
+        # ======================================================
+        # If the question references a verified symbol in this repository,
+        # ensure repository tools are selected so it never fails into 'tools: []'.
+        # ======================================================
+        if resolved_entity and resolved_entity.get("name"):
+            if not tools or state["question_type"] == "general":
+                print(
+                    f"\n[SYMBOL-AWARE GUARD] Overriding empty/general tool selection "
+                    f"for verified {resolved_entity.get('type', 'entity')} '{resolved_entity['name']}'."
+                )
+                if "retrieval" not in tools:
+                    tools.append("retrieval")
+                if state["question_type"] == "general":
+                    state["question_type"] = (
+                        "code"
+                        if resolved_entity.get("type") in ("class", "function")
+                        else "repository"
+                    )
 
         state["tools"] = tools
 

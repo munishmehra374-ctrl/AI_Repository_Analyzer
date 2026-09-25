@@ -111,7 +111,7 @@ class EntityResolver:
 
                 return {
                     "type": "function",
-                    "name": candidate,
+                    "name": self._node_value(function, "name", candidate),
                 }
 
             # ---------------------------------------------
@@ -139,7 +139,7 @@ class EntityResolver:
 
                 return {
                     "type": "class",
-                    "name": candidate,
+                    "name": self._node_value(cls, "name", candidate),
                 }
 
             # ---------------------------------------------
@@ -298,7 +298,24 @@ class EntityResolver:
             question,
         )
 
-        candidates.extend(words)
+        STOP_WORDS = {
+            "what", "which", "where", "when", "why", "how",
+            "does", "do", "did", "is", "are", "was", "were",
+            "the", "this", "that", "these", "those", "and", "or",
+            "of", "to", "for", "from", "with", "my", "your", "in",
+            "on", "at", "by", "an", "a", "write", "show", "give",
+            "explain", "code", "class", "function", "method"
+        }
+
+        filtered_words = [
+            w for w in words
+            if len(w) > 1 and w.lower() not in STOP_WORDS
+        ]
+
+        candidates.extend(filtered_words)
+        for w in filtered_words:
+            candidates.append(w.capitalize())
+            candidates.append(w.lower())
 
         # -------------------------------------------------
         # 6. Natural-language multi-word identifiers

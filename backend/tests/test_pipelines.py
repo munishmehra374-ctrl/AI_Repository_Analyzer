@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 from unittest.mock import MagicMock, patch
 import json
 import uuid
@@ -211,6 +211,34 @@ class TestPipeline4AgenticOrchestration(unittest.TestCase):
 
         self.assertIsInstance(formatted, str)
         self.assertIn("Critical AST Graph Context", formatted)
+
+    def test_symbol_aware_routing_guardrail(self):
+        from app.nodes.planner_node import PlannerNode
+        from unittest.mock import MagicMock
+
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = (
+            '{"question_type": "general", "tools": [], "reason": "Generic task", "deep_analysis": false}'
+        )
+
+        mock_resolver = MagicMock()
+        mock_resolver.resolve.return_value = {"type": "class", "name": "Car"}
+
+        planner = PlannerNode(llm_service=mock_llm, entity_resolver=mock_resolver)
+        state = {
+            "question": "Write the code for Car class",
+            "repository_uploaded": True,
+            "repository_indexed": True,
+            "repository_name": "CarApp",
+            "primary_language": "Python",
+            "deep_analysis": False,
+        }
+
+        output_state = planner(state)
+
+        # Invariant: Car is a verified class in the repo, so tools must contain retrieval and question_type must be code!
+        self.assertIn("retrieval", output_state["tools"])
+        self.assertEqual(output_state["question_type"], "code")
 
 
 if __name__ == "__main__":

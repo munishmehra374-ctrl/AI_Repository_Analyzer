@@ -1,8 +1,87 @@
-version: "3.9"
-
 services:
+  # 1. Neo4j Graph Database
+  neo4j:
+    image: neo4j:5.20
+    container_name: repository-neo4j
+    ports:
+        - "127.0.0.1:7474:7474"   # Only accessible on your laptop
+        - "127.0.0.1:7687:7687"
+
+    environment:
+      - NEO4J_AUTH=neo4j/munish123
+    volumes:
+      - neo4j_data:/data
+    restart: unless-stopped
+
+  # 2. Redis Task Broker
   redis:
     image: redis:7-alpine
     container_name: repository-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"   # Only accessible on your laptop
+    restart: unless-stopped
+
+  # 3. FastAPI Backend
+  backend:
+    image: munish1234/ai-repo-backend:latest
+    container_name: repository-backend
+    ports:
+       - "127.0.0.1:8000:8000"   # Only accessible on your laptop
+    env_file:
+      - backend/.env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=munish123
+    volumes:
+      - chroma_data:/app/chroma_db
+      - bm25_data:/app/bm25_db                  # <--- Shared BM25 volume
+      - cloned_repos_data:/app/cloned_repos
+    depends_on:
+      - redis
+      - neo4j
+    restart: unless-stopped
+    
+  # 4. Celery Background Worker
+  worker:
+    image: munish1234/ai-repo-backend:latest
+    container_name: repository-worker
+    command: celery -A app.worker.celery_app.celery worker --loglevel=info --pool=solo
+    env_file:
+      - backend/.env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=munish123
+      - TOKENIZERS_PARALLELISM=false
+    volumes:
+      - chroma_data:/app/chroma_db
+      - bm25_data:/app/bm25_db                  # <--- Shared BM25 volume
+      - cloned_repos_data:/app/cloned_repos
+    depends_on:
+      - redis
+      - neo4j
+      - backend
+    restart: unless-stopped
+
+  # 5. React Frontend
+  frontend:
+    image: munish1234/ai-repo-frontend:latest
+    container_name: repository-frontend
+    ports:
+       - "127.0.0.1:3000:80"     # Only accessible on your laptop
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# Named volumes so data persists across restarts
+volumes:
+  neo4j_data:
+  chroma_data:
+  bm25_data:                                    # <--- Declared here
+  cloned_repos_data:
+
